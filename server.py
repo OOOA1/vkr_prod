@@ -29,7 +29,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from templates_config import TEMPLATES  # твои захардкоженные шаблоны
 
-app = FastAPI(title="VRK Docs — DOCX → ZIP", version="3.6.0")
+app = FastAPI(title="Help University — DOCX → ZIP", version="3.6.0")
 
 # === Пути базы ===
 BASE_DIR = Path(__file__).resolve().parent
@@ -54,7 +54,7 @@ INSTRUCTION_CANDIDATES: List[Path] = [
 # ============= Красивый UI (без внешних зависимостей) =============
 INDEX_HTML = """
 <!doctype html><meta charset="utf-8">
-<title>VRK Docs — DOCX → ZIP</title>
+<title>Help University — DOCX → ZIP</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{
@@ -138,8 +138,8 @@ INDEX_HTML = """
   <div class="hero">
     <div class="logo">V</div>
     <div>
-      <h1 class="title">VRK Docs — генерация DOCX → ZIP</h1>
-      <p class="subtitle">Загрузите Excel/CSV <b>или</b> укажите Google Sheet. «Широкая» таблица: <b>строка 1 — заголовки</b>, <b>строка 2 — значения</b>. Если обнаружим «шпаргалку» вида <code>output_mask</code>, переключимся в режим «ключ → значение».</p>
+      <h1 class="title">Help University — генерация DOCX → ZIP</h1>
+      <p class="subtitle">Загрузите Excel <b>или</b> укажите Google Sheet. «Широкая» таблица: <b>строка 1 — заголовки</b>, <b>строка 2 — значения</b>.</p>
     </div>
   </div>
 
