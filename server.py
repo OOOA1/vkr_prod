@@ -344,6 +344,11 @@ class SafeMap(dict):
 def slugify(name: str) -> str:
     return re.sub(INVALID_FS, "_", name).rstrip(" .") or "file"
 
+def slugify_path(path: str) -> str:
+    parts = re.split(r"[\\/]+", (path or "").strip())
+    parts = [slugify(p) for p in parts if p and p.strip()]
+    return "/".join(parts)
+
 def _norm(s: str) -> str:
     return re.sub(r"\s+", "", str(s)).replace("\ufeff","").replace("\xa0","").replace("ё","е").lower()
 
@@ -608,11 +613,18 @@ def generate_zip(
                 doc.render(ctx)
 
                 # имя файла из шаблонной маски out
-                out_name = tpl["out"].format_map(SafeMap(record))
-                out_name = slugify(out_name) or "doc_001.docx"
+                out_name = slugify(tpl["out"].format_map(SafeMap(record)) or "doc_001.docx")
+
+                # подпапка (опционально)
+                subdir_raw = (tpl.get("dir") or "").strip()
+                if subdir_raw:
+                    subdir_filled = slugify_path(subdir_raw.format_map(SafeMap(record)))
+                    arcname = "/".join([folder, subdir_filled, out_name])
+                else:
+                    arcname = "/".join([folder, out_name])
 
                 out_mem = io.BytesIO(); doc.save(out_mem)
-                zf.writestr(f"{folder}/{out_name}", out_mem.getvalue())
+                zf.writestr(arcname, out_mem.getvalue())
             except Exception as e:
                 err = slugify(tpl.get("out","file")) + ".ERROR.txt"
                 zf.writestr(f"{folder}/{err}", f"Ошибка ({tpl['path']}): {type(e).__name__}: {e}")

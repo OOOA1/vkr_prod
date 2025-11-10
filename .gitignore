@@ -1,0 +1,78 @@
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Python bytecode / cache ===
+__pycache__/
+*.py[cod]
+*$py.class
+
+# === Virtualenvs ===
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# === Build / packaging ===
+build/
+dist/
+*.egg-info/
+.eggs/
+wheelhouse/
+pip-wheel-metadata/
+
+# === Test / coverage ===
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# === Type checkers / linters ===
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+.pyright/
+
+# === Notebooks ===
+.ipynb_checkpoints/
+
+# === Tools / caches ===
+.cache/
+pytestdebug.log
+
+# === Django / Flask (локальные артефакты) ===
+db.sqlite3
+instance/
+*.sqlite3
+media/
+staticfiles/
+
+# === Celery / runtime ===
+celerybeat-schedule
+celerybeat.pid
+
+# === Env & secrets (оставь .env.example в репо) ===
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+
+# === IDE ===
+.vscode/
+.idea/
+*.iml
+.ropeproject/
+
+# === Logs / temp ===
+*.log
+*.out
+*.err
+tmp/
+temp/
