@@ -482,4 +482,82 @@ TEMPLATES = [
             "monthBefPraktika" : "ДатаЗаМесяцДоНачПракт",
         }
     },
+    {
+        "path": "input/new_docx10/психология/инд задание.docx",
+        "dir":  "психология",
+        "out":  "инд_задание_{ФИО}_{Группа}.docx",
+        "fields": {
+            "pr_type": "ТипПрактики",
+            "vidPractiki": "ВидПрактика",
+            "group": "Группа",
+            "tel": "телефон",
+            "studEmail": "emailстуд",
+            "RukOrgFIO": "РукВУЗФИО",
+            "stepenNauchRuk": "СтепеньНаучРук",
+            "ZvanieNauchRuk": "ЗваниеНаучРук",
+            "org_name": "БазаПрактики",
+            "startPracticaDate": "НачалоПрактики",
+            "endPracticaDate": "КонецПрактики",
+            "RukProfOrg": "РукПрофОрг",
+            "RukOrg": "РукВУЗ",
+            "fio": "ФИО",
+        }
+    },
+    {
+        "path": "input/new_docx10/психология/совместный график.docx",
+        "dir":  "психология",
+        "out":  "совместный_график_{ФИО}_{Группа}.docx",
+        "fields": {
+            "fioVP" : "ФИОвВП",
+            "group": "Группа",
+            "kurs": "Курс",
+            "naprPodg": "направлениеПодготовки",
+            "startPracticaDate": "НачалоПрактики",
+            "endPracticaDate": "КонецПрактики",
+            "org_name": "БазаПрактики",
+            "UrAdrVUZ": "ЮрАдресПрофОрг",
+            "RukProfOrg": "РукПрофОрг",
+            "RukOrg": "РукВУЗ",
+            "initialStudent": "РасшифровкаСтудента",
+
+        }
+    },
+    {
+        "path": "input/new_docx10/психология/титул.docx",
+        "dir":  "психология",
+        "out":  "титул_{ФИО}_{Группа}.docx",
+        "fields": {
+            "pr_type": "ТипПрактики",
+            "vidPractiki": "ВидПрактика",
+            "org_name": "БазаПрактики",
+            "startPracticaDate": "НачалоПрактики",
+            "endPracticaDate": "КонецПрактики",
+            "RukProfOrg": "РукПрофОрг",
+            "fioRukProfOrg": "ФИОРукПрофОрг",
+            "RukOrgFIO": "РукВУЗФИО",
+            "group": "Группа",
+            "kurs": "Курс",
+            "naprPodg": "направлениеПодготовки",
+            "fio": "ФИО",
+            "year": "год",
+        }
+    },
+    {
+        "path": "input/new_docx10/психология/характеристика.docx",
+        "dir":  "психология",
+        "out":  "характеристика_{ФИО}_{Группа}.docx",
+        "fields": {
+            "org_name": "БазаПрактики",
+            "UrAdrVUZ": "ЮрАдресПрофОрг",
+            "startPracticaDate": "НачалоПрактики",
+            "endPracticaDate": "КонецПрактики",
+            "fioDP": "ФИОДП",
+            "group": "Группа",
+            "strukPodr": "СтруктурноеПодразделение",
+            "dolj": "Должность",
+            "RukProfOrg": "РукПрофОрг",
+            "INN": "ОргИНН",
+            "ogrn" : "ОГРН",
+        }
+    },
 ]
