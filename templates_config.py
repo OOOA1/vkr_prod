@@ -192,6 +192,7 @@ TEMPLATES = [
             "stepenNauchRuk": "СтепеньНаучРук",
             "ZvanieNauchRuk": "ЗваниеНаучРук",
             "org_name": "БазаПрактики",
+            "UrAdrVUZ": "ЮрАдресПрофОрг",
             "startPracticaDate": "НачалоПрактики",
             "endPracticaDate": "КонецПрактики",
             "RukProfOrg": "РукПрофОрг",
@@ -296,6 +297,7 @@ TEMPLATES = [
             "Date": "СегодняшняяДата"
         }
     },
+    # ////////////////////// docx10 //////////////////////
     {
         "path": "input/new_docx10/менеджмент_УП_экономика/График.docx",
         "dir":  "менеджмент_УП_экономика",
@@ -380,10 +382,24 @@ TEMPLATES = [
         "dir":  "менеджмент_УП_экономика",
         "out":  "Инд_задание_{ФИО}_{Группа}.docx",
         "fields": {
+            "workObject": "ОбъектРаботы",
+            "pr_type": "ТипПрактики",
+            "kafedra": "Кафедра",
             "fioDP": "ФИОДП",
             "group": "Группа",
-            "stydentPhoneNum" : "ТелефонСтудента",
-            "studemail" : "ЭлПочтаСтудента",
+            "tel": "телефон",
+            "studEmail": "emailстуд",
+            "initialRukVRK": "ИницРукВКР",
+            "stepenNauchRuk": "СтепеньНаучРук",
+            "ZvanieNauchRuk": "ЗваниеНаучРук",
+            "org_name": "БазаПрактики",
+            "UrAdrVUZ": "ЮрАдресПрофОрг",
+            "startPracticaDate": "НачалоПрактики",
+            "endPracticaDate": "КонецПрактики",
+            "RukProfOrg": "РукПрофОрг",
+            "RukOrg": "РукВУЗ",
+            "initialStudent": "РасшифровкаСтудента",
+            "Date": "СегодняшняяДата"
         }
     },
     {
@@ -449,6 +465,7 @@ TEMPLATES = [
         "fields": {
             "org_name": "БазаПрактики",
             "fioRukProfOrgVP": "ФИОРукПрофОргВП",
+            "fioRukProfOrg": "ФИОРукПрофОрг",
             "dolj": "Должность",
             "burnOrgDate": "ДатаСозданияОрганизации",
             "ustavProfOrg" : "УставПрофОрг",
@@ -621,6 +638,28 @@ TEMPLATES = [
             "student":  "ФИО",
             "initialStudent": "РасшифровкаСтудента",
             "Date": "СегодняшняяДата"
+        }
+    },
+    {
+        "path": "input/new_docx11/Лист согласования ЛС.docx",
+        "dir":  "вкр",
+        "out":  "Лист_согласования_ЛС_{ФИО}_{Группа}.docx",
+        "fields": {
+            "Date": "СегодняшняяДата",
+        }
+    },
+    {
+        "path": "input/new_docx11/Ознакомительный лист.docx",
+        "dir":  "вкр",
+        "out":  "Ознакомительный_лист_{ФИО}_{Группа}.docx",
+        "fields": {
+            "FStud": "ФамилияСтудента",
+            "NStud": "ИмяСтудента",
+            "OStud": "ОтчествоСтудента",
+            "group": "Группа",
+            "naprPodg": "направлениеПодготовки",
+            "initialStudent": "РасшифровкаСтудента",
+            "Date": "СегодняшняяДата",
         }
     },
 ]
