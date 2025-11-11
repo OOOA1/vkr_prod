@@ -399,7 +399,9 @@ TEMPLATES = [
             "RukProfOrg": "РукПрофОрг",
             "RukOrg": "РукВУЗ",
             "initialStudent": "РасшифровкаСтудента",
-            "Date": "СегодняшняяДата"
+            "Date": "СегодняшняяДата",
+            "stydentPhoneNum" : "ТелефонСтудента",
+            "studemail" : "ЭлПочтаСтудента",
         }
     },
     {
