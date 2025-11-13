@@ -398,8 +398,9 @@ select option:hover {
   <select id="direction">
     <option value="">— выберите комплект —</option>
     <option value="kit1">Условный комплект 1</option>
-    <option value="kit2">Условный комплект 2</option>
-    <option value="kit3">Условный комплект 3</option>
+    <option value="kit2">Менеджмент УП экономика</option>
+    <option value="kit3">Психология</option>
+    <option value="kit4">Условный комплект 4</option>
     <!-- добавишь ещё, когда появятся новые наборы -->
   </select>
 
@@ -416,11 +417,12 @@ select option:hover {
   // Комплекты → папка в input/
   // ВАЖНО: здесь должны быть реальные папки, в которых лежат шаблоны из templates_config.py
   const kitFolders = {
-    kit1: "input/first/",
-    kit2: "input/new_docx10/менеджмент_УП_экономика/",
     // пример для будущего:
     // kitn: "input/new_docx11111/",
-    kit3: "input/new_docx11/",
+    kit1: "input/first/",
+    kit2: "input/менеджмент_УП_экономика",
+    kit3: "input/психология",
+    kit4: "input/new_docx11/",
   };
 
   const directionSelect = document.getElementById("direction");
@@ -730,7 +732,7 @@ def download_template(
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as w:
             df.to_excel(w, sheet_name="Sheet1", index=False)
-            
+
             # --- авто-подбор ширины колонок по заголовкам ---
             ws = w.sheets["Sheet1"]
             for col_idx, col_name in enumerate(headers_list, start=1):
