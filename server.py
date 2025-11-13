@@ -26,6 +26,7 @@ from docxtpl import DocxTemplate
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from openpyxl.utils import get_column_letter
 
 from templates_config import TEMPLATES  # твои захардкоженные шаблоны
 import unicodedata
@@ -725,10 +726,22 @@ def download_template(
                     headers_list.append(col)
 
         df = pd.DataFrame([[""] * len(headers_list)], columns=headers_list)
+
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as w:
             df.to_excel(w, sheet_name="Sheet1", index=False)
-        buf.seek(0)
+            
+            # --- авто-подбор ширины колонок по заголовкам ---
+            ws = w.sheets["Sheet1"]
+            for col_idx, col_name in enumerate(headers_list, start=1):
+                col_letter = get_column_letter(col_idx)
+                # длина заголовка (можно расширить на другие строки, если понадобится)
+                header_val = ws.cell(row=1, column=col_idx).value
+                max_len = len(str(header_val)) if header_val is not None else 0
+                # слегка увеличим, чтобы было не впритык
+                ws.column_dimensions[col_letter].width = max_len + 2
+
+            buf.seek(0)
         return StreamingResponse(
             buf,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
