@@ -2,7 +2,7 @@
 # Путь к .docx шаблонам остаётся относительным (папка input/)
 TEMPLATES = [
     {
-        "path": "input/дневник.docx",
+        "path": "input/first/дневник.docx",
         "out":  "Дневник_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",
@@ -21,7 +21,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/договор новый тз.docx",
+        "path": "input/first/договор новый тз.docx",
         "out":  "Договор_новый_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",   
@@ -44,7 +44,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/договор старый тз.docx",
+        "path": "input/first/договор старый тз.docx",
         "out":  "Договор_старый_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",   
@@ -67,7 +67,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Доп.сведения.docx",
+        "path": "input/first/Доп.сведения.docx",
         "out":  "Доп.сведения_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",
@@ -99,7 +99,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Задание на ВКР - 1.docx",
+        "path": "input/first/Задание на ВКР - 1.docx",
         "out":  "Задание_на_ВКР - 1_{ФИО}_{Группа}.docx",
         "fields": {
             "naprPodg": "направлениеПодготовки",
@@ -115,7 +115,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Задание на ВКР - 2.docx",
+        "path": "input/first/Задание на ВКР - 2.docx",
         "out":  "Задание_на_ВКР - 2_{ФИО}_{Группа}.docx",
         "fields": {
             "fioDP": "ФИОДП",
@@ -127,7 +127,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Заявление на АП - 2.docx",
+        "path": "input/first/Заявление на АП - 2.docx",
         "out":  "Заявление на АП - 2_{ФИО}_{Группа}.docx",
         "fields": {
             "zavKaf": "ЗаведующийКафедрой",
@@ -141,7 +141,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Заявление на размещение в ЭБС.docx",
+        "path": "input/first/Заявление на размещение в ЭБС.docx",
         "out":  "Заявление на размещение в ЭБС_{ФИО}_{Группа}.docx",
         "fields": {
             "fioRP": "ФИОвРП",
@@ -153,7 +153,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/заявление.docx",
+        "path": "input/first/заявление.docx",
         "out":  "заявление_{ФИО}_{Группа}.docx",
         "fields": {
             "zavKaf": "ЗаведующийКафедрой",
@@ -178,7 +178,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/индивидуальное задание.docx",
+        "path": "input/first/индивидуальное задание.docx",
         "out":  "индивидуальное задание_{ФИО}_{Группа}.docx",
         "fields": {
             "workObject": "ОбъектРаботы",
@@ -202,7 +202,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Каникулы.docx",
+        "path": "input/first/Каникулы.docx",
         "out":  "Каникулы_{ФИО}_{Группа}.docx",
         "fields": {
             "fioRP": "ФИОвРП",
@@ -219,7 +219,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Ознакомительный лист.docx",
+        "path": "input/first/Ознакомительный лист.docx",
         "out":  "Ознакомительный_лист_{ФИО}_{Группа}.docx",
         "fields": {
             "initialStudent": "РасшифровкаСтудента",
@@ -232,7 +232,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/совместный график.docx",
+        "path": "input/first/совместный график.docx",
         "out":  "совместный_график_{ФИО}_{Группа}.docx",
         "fields": {
             "fioRP": "ФИОвРП",
@@ -252,7 +252,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/Титул ВКР.docx",
+        "path": "input/first/Титул ВКР.docx",
         "out":  "Титул_ВКР_{ФИО}_{Группа}.docx",
         "fields": {
             "naprPodg": "направлениеПодготовки",
@@ -267,7 +267,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/титул отчета.docx",
+        "path": "input/first/титул отчета.docx",
         "out":  "титул_отчета_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",
@@ -283,7 +283,7 @@ TEMPLATES = [
         }
     },
     {
-        "path": "input/характеристика.docx",
+        "path": "input/first/характеристика.docx",
         "out":  "характеристика_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",

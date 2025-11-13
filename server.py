@@ -28,8 +28,50 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from templates_config import TEMPLATES  # твои захардкоженные шаблоны
+import unicodedata
 
 app = FastAPI(title="Help University — DOCX → ZIP", version="3.6.0")
+
+# === Стабильные ID для шаблонов ===
+def slug_id(v: str) -> str:
+    v = unicodedata.normalize("NFKC", v)
+    v = re.sub(r"\s+", " ", v).strip()
+    v = v.replace("\\", "/")
+    allowed = "._-() "
+    out = []
+    for ch in v:
+        out.append(ch if (ch.isalnum() or ch in allowed) else "_")
+    return re.sub(r"\s+", "_", "".join(out)).lower()
+
+# один раз навешиваем id на все шаблоны
+for idx, tpl in enumerate(TEMPLATES):
+    if "id" not in tpl:
+        stem = Path(tpl["path"]).stem
+        tpl["id"] = slug_id(stem) or f"tpl_{idx:03d}"
+
+@app.get("/catalog")
+def catalog(prefix: Optional[str] = None):
+    """
+    Отдаём список документов. Если передан prefix,
+    фильтруем только шаблоны, у которых path начинается с этого префикса.
+    """
+    tpls = TEMPLATES
+    if prefix:
+        pfx = prefix.replace("\\", "/")
+        tpls = [
+            t for t in TEMPLATES
+            if t["path"].replace("\\", "/").startswith(pfx)
+        ]
+
+    items = []
+    for t in tpls:
+        path_norm = t["path"].replace("\\", "/")
+        items.append({
+            "id": t["id"],
+            "title": Path(path_norm).stem + ".docx",
+            "path": path_norm,
+        })
+    return {"items": items}
 
 # === Пути базы ===
 BASE_DIR = Path(__file__).resolve().parent
@@ -53,284 +95,456 @@ INSTRUCTION_CANDIDATES: List[Path] = [
 
 # ============= Красивый UI (без внешних зависимостей) =============
 INDEX_HTML = """
-<!doctype html><meta charset="utf-8">
-<title>Help University — DOCX → ZIP</title>
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Help University — Автоматизация документов</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-  :root{
-    --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --text:#e5e7eb;
-    --accent:#60a5fa; --accent-2:#22d3ee; --accent-3:#a78bfa;
-    --success:#10b981; --warn:#f59e0b; --danger:#ef4444;
-    --border:#1f2a44; --shadow:0 20px 40px rgba(0,0,0,.35);
-    --radius:18px;
+  :root {
+    --brand: #3b82f6;
+    --brand-glow: #60a5fa;
+    --bg: #0f172a;
+    --card: rgba(17,25,40,0.85);
+    --text: #f8fafc;
+    --subtext: #94a3b8;
+    --radius: 18px;
+    --blur: 20px;
   }
-  @media (prefers-color-scheme: light) {
-    :root{
-      --bg:#f6f7fb; --card:#ffffff; --text:#0f172a; --muted:#64748b;
-      --border:#e5e7eb; --shadow:0 18px 40px rgba(2,6,23,.08);
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Inter", system-ui, sans-serif;
+    color: var(--text);
+    background: radial-gradient(circle at 30% 10%, #1e3a8a 0%, #0f172a 80%);
+    overflow-x: hidden;
+    animation: fadeInBg 2s ease;
+  }
+
+  @keyframes fadeInBg {
+    from {opacity: 0;}
+    to {opacity: 1;}
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(var(--blur));
+    background: rgba(17,25,40,0.65);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+  }
+
+  .logo {
+    font-weight: 800;
+    font-size: 26px;
+    background: linear-gradient(90deg, var(--brand-glow), #7dd3fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+
+  .tagline {
+    font-size: 14px;
+    color: var(--subtext);
+  }
+
+  main {
+    max-width: 920px;
+    margin: 70px auto;
+    padding: 40px 50px;
+    border-radius: var(--radius);
+    background: var(--card);
+    backdrop-filter: blur(var(--blur));
+    box-shadow: 0 0 60px rgba(59,130,246,0.15);
+    animation: slideUp 0.8s ease;
+  }
+
+  @keyframes slideUp {
+    from {opacity:0; transform: translateY(20px);}
+    to {opacity:1; transform: translateY(0);}
+  }
+
+  h1 {
+    font-size: 32px;
+    margin-bottom: 10px;
+    background: linear-gradient(90deg, var(--brand-glow), #93c5fd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  p.sub {
+    color: var(--subtext);
+    font-size: 15px;
+    margin-top: 0;
+  }
+
+  label {
+    font-weight: 600;
+    display: block;
+    margin-top: 24px;
+  }
+
+    select, input[type=file], input[type=url] {
+        width: 100%;
+        margin-top: 8px;
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+        font-size: 15px;
+        transition: all 0.3s ease;
     }
+
+    select option {
+        color: #000;
+        background: #fff;
+    }
+
+  select:focus, input:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 10px rgba(59,130,246,0.3);
+    background: rgba(255,255,255,0.08);
   }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{
-    margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
-    background:
-      radial-gradient(1200px 400px at 10% -10%, rgba(96,165,250,.12), transparent 60%),
-      radial-gradient(900px 300px at 100% 20%, rgba(167,139,250,.12), transparent 60%),
-      var(--bg);
-    color:var(--text);
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 20px;
   }
-  .wrap{max-width:1100px; margin:48px auto; padding:0 20px}
-  .hero{display:flex; align-items:flex-start; gap:18px; margin-bottom:24px;}
-  .logo{
-    width:48px; height:48px; border-radius:50%;
-    background:linear-gradient(135deg,var(--accent),var(--accent-3));
-    display:grid; place-items:center; color:white; font-weight:800;
-    box-shadow:var(--shadow);
+
+  button {
+    flex: 1;
+    padding: 14px 18px;
+    font-size: 15px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
   }
-  .title{font-size:28px; font-weight:800; margin:0}
-  .subtitle{margin:4px 0 0; color:var(--muted)}
-  .card{
-    background:var(--card); border:1px solid var(--border);
-    border-radius:var(--radius); padding:22px; box-shadow:var(--shadow);
+
+  .btn-primary {
+    background: linear-gradient(90deg, var(--brand), var(--brand-glow));
+    color: white;
+    box-shadow: 0 0 20px rgba(59,130,246,0.25);
   }
-  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px}
-  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
-  label{font-weight:700; font-size:14px; margin-bottom:8px; display:block}
-  input[type=file], input[type=url], input[type=number]{
-    width:100%; padding:12px 14px; border-radius:12px; outline:0;
-    border:1px solid var(--border); background:transparent; color:var(--text);
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(96,165,250,0.4);
   }
-  input::placeholder{color:var(--muted)}
-  .drop{border:1.6px dashed var(--border); border-radius:14px; padding:18px;
-    display:flex; align-items:center; gap:12px; transition:.2s;}
-  .drop.drag{border-color:var(--accent)}
-  .chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
-    font-size:12px; border:1px solid var(--border); color:var(--muted); background:transparent}
-  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
-  .btn{
-    appearance:none; border:0; cursor:pointer; color:#0b1220; font-weight:800;
-    padding:12px 18px; border-radius:12px; transition:transform .05s ease;
-    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+
+  .btn-outline {
+    background: transparent;
+    border: 2px solid var(--brand);
+    color: var(--brand-glow);
   }
-  .btn.secondary{background:transparent; color:var(--text); border:1px solid var(--border)}
-  .btn:active{transform:translateY(1px)}
-  .btn:disabled{opacity:.6; cursor:not-allowed}
-  .badges{display:flex; gap:8px; flex-wrap:wrap}
-  .badge{font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--muted)}
-  .badge.ok{color:var(--success); border-color:rgba(16,185,129,.35)}
-  .badge.warn{color:var(--warn); border-color:rgba(245,158,11,.35)}
-  .badge.err{color:var(--danger); border-color:rgba(239,68,68,.35)}
-  .preview{margin-top:16px; overflow:auto; border:1px solid var(--border); border-radius:12px}
-  table{border-collapse:collapse; width:100%; font-size:13px}
-  th,td{border-bottom:1px solid var(--border); padding:10px 12px; text-align:left}
-  th{color:var(--muted); font-weight:700}
-  .foot{margin-top:18px; color:var(--muted); font-size:12px}
-  .toast{margin-top:12px; padding:12px 14px; border-radius:12px; border:1px solid var(--border)}
-  .toast.ok{border-color:rgba(16,185,129,.35); color:var(--success)}
-  .toast.err{border-color:rgba(239,68,68,.35); color:var(--danger)}
-  .spinner{width:16px;height:16px;border-radius:999px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .actions{display:flex; gap:10px; align-items:center; justify-content:flex-start; flex-wrap:wrap; margin-top:8px}
+
+  .btn-outline:hover {
+    background: var(--brand);
+    color: white;
+    box-shadow: 0 0 25px rgba(59,130,246,0.4);
+  }
+
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+    margin: 36px 0;
+  }
+
+  .docs {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+
+  .doc-item {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background .3s, transform .2s, box-shadow .2s;
+  }
+
+  .doc-item:hover {
+    background: rgba(255,255,255,0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 0 12px rgba(59,130,246,0.2);
+  }
+
+  footer {
+    text-align: center;
+    margin: 60px 0 20px;
+    color: var(--subtext);
+    font-size: 14px;
+  }
+
+  .glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 30% 0%, rgba(59,130,246,0.15), transparent 70%);
+    z-index: -1;
+  }
+
+  /* общий стиль поля select */
+select {
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(145deg, rgba(30,41,59,0.9), rgba(17,25,40,0.9));
+  color: var(--text);
+  font-size: 15px;
+  appearance: none; /* убираем стандартную стрелку */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg fill="white" height="16" width="16" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  transition: all 0.3s ease;
+}
+
+select:hover {
+  border-color: rgba(96,165,250,0.5);
+  background: linear-gradient(145deg, rgba(37,54,84,0.95), rgba(20,29,50,0.95));
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 10px rgba(59,130,246,0.4);
+  background: linear-gradient(145deg, rgba(40,60,90,0.95), rgba(22,32,55,0.95));
+}
+
+/* оформление выпадающих опций */
+select option {
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 10px;
+  border: none;
+}
+
+/* подсветка при наведении на вариант */
+select option:hover {
+  background: #2563eb;
+  color: white;
+}
+
+
+  @media (max-width:600px){
+    main {padding: 25px;}
+  }
+
+  /* subtle floating animation for buttons */
+  .floaty {
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100% {transform: translateY(0);}
+    50% {transform: translateY(-4px);}
+  }
 </style>
+</head>
+<body>
 
-<div class="wrap">
-  <div class="hero">
-    <div class="logo">V</div>
-    <div>
-      <h1 class="title">Help University — генерация DOCX → ZIP</h1>
-      <p class="subtitle">Загрузите Excel <b>или</b> укажите Google Sheet. «Широкая» таблица: <b>строка 1 — заголовки</b>, <b>строка 2 — значения</b>.</p>
-    </div>
+<div class="glow"></div>
+
+<header>
+  <div class="logo">Help University</div>
+  <div class="tagline">Автоматизация документов</div>
+</header>
+
+<main>
+  <h1>Автоматизация документов</h1>
+  <p class="sub">Создавайте и скачивайте шаблоны по направлениям подготовки. Лёгкий, современный и стильный интерфейс.</p>
+
+  <label>Загрузить таблицу Excel или CSV</label>
+  <input type="file" id="fileInput" accept=".xlsx,.csv">
+  <small style="color:var(--subtext)">Поддерживаются .xlsx и .csv файлы</small>
+
+  <label style="margin-top:14px;">Или вставьте ссылку на Google Sheet</label>
+  <input type="url" id="gsheetUrl" placeholder="https://docs.google.com/spreadsheets/d/...">
+
+  <div class="row">
+    <button class="btn-outline floaty" id="btnTemplate">📄 Скачать шаблон</button>
+    <button class="btn-outline floaty" id="btnInstruction">📘 Скачать инструкцию</button>
   </div>
 
-  <div class="card">
-    <form id="f" action="/generate" method="post" enctype="multipart/form-data">
-      <div class="grid">
-        <div>
-          <label>Excel (.xlsx) или CSV</label>
-          <div class="drop" id="drop">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 12 4-4m-4 4-4-4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <div>
-              <input type="file" name="table_file" id="table_file" accept=".xlsx,.csv" style="display:none">
-              <button class="btn secondary" id="chooseFile" type="button">Выбрать файл</button>
-              <div class="hint" id="fileHint">Файл не выбран</div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label>Google Sheet (опционально)</label>
-          <input type="url" name="gsheet_url" id="gsheet_url" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0">
-          <div class="hint">Доступ к таблице: <b>Anyone with the link</b>. Если введёте ссылку — файл очищаем автоматически.</div>
-        </div>
-      </div>
+  <div class="divider"></div>
 
-      <div class="grid" style="margin-top:16px">
-        <div>
-          <label>Строка заголовков (для «широкой» таблицы)</label>
-          <input type="number" name="header_row" id="header_row" value="1" min="1">
-        </div>
-        <div>
-          <label>Статус источника</label>
-          <div class="row">
-            <span class="chip" id="chipSource">источник не выбран</span>
-            <span class="chip" id="chipMode">режим: —</span>
-          </div>
-        </div>
-      </div>
+  <label for="direction">Направление подготовки</label>
+  <select id="direction">
+    <option value="">— выберите комплект —</option>
+    <option value="kit1">Условный комплект 1</option>
+    <option value="kit2">Условный комплект 2</option>
+    <option value="kit3">Условный комплект 3</option>
+    <!-- добавишь ещё, когда появятся новые наборы -->
+  </select>
 
-      <div class="actions">
-        <button id="btnInspect" type="button" class="btn">Проверить</button>
-        <button id="btnGen" type="submit" class="btn">Сгенерировать ZIP</button>
-        <button id="btnTpl" class="btn secondary" type="button">Скачать шаблон (main_example.xlsx)</button>
-        <button id="btnInstr" class="btn secondary" type="button">Скачать инструкцию (DOCX)</button>
-        <span id="spin" style="display:none" class="spinner"></span>
-      </div>
-    </form>
+  <div id="docs" class="docs"></div>
 
-    <div id="rep" class="foot"></div>
+  <div class="row" style="margin-top:28px;">
+    <button class="btn-primary floaty" id="downloadBtn" disabled>⬇️ Сгенерировать ZIP</button>
   </div>
-</div>
+</main>
+
+<footer>© 2025 Help University • Интеллектуальная автоматизация документов</footer>
 
 <script>
-  const $ = (s)=>document.querySelector(s);
-  const f = $('#f'), rep = $('#rep'), spin = $('#spin');
-  const file = $('#table_file'), gs = $('#gsheet_url'), headerRow=$('#header_row');
-  const chooseBtn=$('#chooseFile'), fileHint=$('#fileHint'), drop=$('#drop');
-  const chipSource=$('#chipSource'), chipMode=$('#chipMode');
-  const btnI=$('#btnInspect'), btnG=$('#btnGen'), btnTpl=$('#btnTpl'), btnInstr=$('#btnInstr');
+  // Комплекты → папка в input/
+  // ВАЖНО: здесь должны быть реальные папки, в которых лежат шаблоны из templates_config.py
+  const kitFolders = {
+    kit1: "input/first/",
+    kit2: "input/new_docx10/менеджмент_УП_экономика/",
+    // пример для будущего:
+    // kitn: "input/new_docx11111/",
+    kit3: "input/new_docx11/",
+  };
 
-  // Remember header row
-  headerRow.value = localStorage.getItem('hdrRow') || '1';
-  headerRow.addEventListener('change', ()=>localStorage.setItem('hdrRow', headerRow.value));
+  const directionSelect = document.getElementById("direction");
+  const docsDiv = document.getElementById("docs");
+  const downloadBtn = document.getElementById("downloadBtn");
+  const fileInput = document.getElementById("fileInput");
+  const gsheetUrl = document.getElementById("gsheetUrl");
 
-  function setSourceChip(){
-    const hasFile = file.files && file.files.length>0;
-    const hasGS = !!gs.value.trim();
-    if(hasGS){
-      chipSource.textContent = 'источник: Google Sheet';
-    }else if(hasFile){
-      chipSource.textContent = 'источник: файл ' + (file.files[0]?.name || '');
-    }else{
-      chipSource.textContent = 'источник не выбран';
+  async function loadKitDocs(kit) {
+    docsDiv.innerHTML = "";
+    if (!kit) {
+      downloadBtn.disabled = true;
+      return;
+    }
+
+    const prefix = kitFolders[kit];
+    if (!prefix) {
+      downloadBtn.disabled = true;
+      docsDiv.innerHTML = '<div class="empty">Для этого комплекта ещё не настроена папка</div>';
+      return;
+    }
+
+    downloadBtn.disabled = false;
+
+    try {
+      const resp = await fetch("/catalog?prefix=" + encodeURIComponent(prefix));
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const data = await resp.json();
+      const items = data.items || [];
+
+      if (!items.length) {
+        docsDiv.innerHTML = '<div class="empty">В этой папке пока нет шаблонов</div>';
+        return;
+      }
+
+      items.forEach(doc => {
+        const item = document.createElement("label");
+        item.className = "doc-item";
+        item.innerHTML = `<input type="checkbox" checked data-id="${doc.id}"> <span>${doc.title}</span>`;
+        docsDiv.appendChild(item);
+      });
+    } catch (e) {
+      console.error(e);
+      docsDiv.innerHTML = '<div class="empty">Не удалось загрузить список документов</div>';
     }
   }
 
-  function needSource(){
-    const hasFile = file.files && file.files.length>0;
-    const hasGS = !!gs.value.trim();
-    if(!hasFile && !hasGS){
-      toast('Укажите Google Sheet ИЛИ выберите файл', 'err');
-      return false;
+  directionSelect.addEventListener("change", () => {
+    const kit = directionSelect.value;
+    loadKitDocs(kit);
+  });
+
+  function blobDownload(filename, blob){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // ==== старый функционал: скачать шаблон ====
+  document.getElementById("btnTemplate").addEventListener("click", () => {
+    window.location.href = "/template";
+  });
+
+  // ==== старый функционал: скачать инструкцию ====
+  document.getElementById("btnInstruction").addEventListener("click", () => {
+    window.location.href = "/instruction";
+  });
+
+  // ==== старый функционал: сгенерировать ZIP по таблице ====
+  downloadBtn.addEventListener("click", async () => {
+    const dir = directionSelect.value;
+    if (!dir) return alert("Выберите направление!");
+
+    const selectedDocs = [...docsDiv.querySelectorAll("input:checked")]
+      .map(i => i.nextSibling.textContent.trim());
+
+    // (пока выбранные документы НИКАК не влияют на бэкенд — как ты и просил, новые фичи потом)
+    const hasFile = fileInput.files && fileInput.files[0];
+    const gsheet = gsheetUrl.value.trim();
+
+    if (!hasFile && !gsheet) {
+      return alert("Загрузите файл или вставьте ссылку на Google Sheet");
     }
-    return true;
-  }
 
-  function toast(text, kind){
-    rep.innerHTML = '<div class="toast '+(kind||'')+'">'+text+'</div>' + rep.innerHTML;
-  }
+    const fd = new FormData();
+    if (hasFile) {
+      fd.append("table_file", fileInput.files[0]);    // старое имя поля
+    } else {
+      fd.append("gsheet_url", gsheet);               // старое имя поля
+    }
+    fd.append("header_row", "1");                     // как было в старом UI
 
-  // File select & DnD
-  chooseBtn.addEventListener('click', ()=> file.click());
-  file.addEventListener('change', ()=>{
-    if(file.files.length){ gs.value=''; fileHint.textContent = 'Выбран: '+file.files[0].name; }
-    else { fileHint.textContent = 'Файл не выбран'; }
-    setSourceChip();
-  });
-  gs.addEventListener('input', ()=>{ if(gs.value.trim()) { file.value=''; fileHint.textContent='Файл не выбран'; } setSourceChip(); });
+    const prevText = downloadBtn.textContent;
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = "⏳ Генерация...";
 
-  ;['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.add('drag');}));
-  ;['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.remove('drag');}));
-  drop.addEventListener('drop', (e)=>{
-    const dt=e.dataTransfer; if(!dt||!dt.files||!dt.files.length) return;
-    const f=dt.files[0];
-    if(!/\.(xlsx|csv)$/i.test(f.name)){ toast('Ожидается .xlsx или .csv', 'err'); return; }
-    file.files = dt.files; gs.value=''; fileHint.textContent='Выбран: '+f.name; setSourceChip();
-  });
-
-  function kvPairs(pairs){
-    if(!pairs||!pairs.length) return '';
-    const rows = pairs.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
-    return `<div class="preview"><table><thead><tr><th>Ключ</th><th>Значение</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  }
-  function previewWide(obj){
-    if(!obj) return '';
-    const rows = Object.entries(obj).map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('');
-    return `<div class="preview"><table><tbody>${rows}</tbody></table></div>`;
-  }
-
-  async function inspect(){
-    if(!needSource()) return;
-    rep.innerHTML=''; spin.style.display='inline';
-    const fd=new FormData(f);
-    const r=await fetch('/inspect',{method:'POST',body:fd});
-    const d=await r.json(); spin.style.display='none';
-    if(!r.ok){ toast(d.detail||'Ошибка', 'err'); return; }
-
-    chipMode.textContent = 'режим: '+(d.meta?.mode || '—');
-
-    const meta = d.meta ? `<div class="badges">
-      <span class="badge">источник: ${d.meta.source}</span>
-      ${d.meta.mode==='wide' ? `<span class="badge">header: ${(d.meta.header_row??0)+1}</span>` : ''}
-      ${d.meta.gid!==undefined ? `<span class="badge">gid: ${d.meta.gid}</span>` : ''}
-    </div>` : '';
-
-    const miss = d.missing?.length
-      ? '<div class="toast warn">Отсутствуют ключевые поля: '+d.missing.join(', ')+'</div>'
-      : '<div class="toast ok">Ключевые поля найдены</div>';
-
-    const cols = (d.columns?.length)
-      ? '<div class="foot"><b>Колонки ('+d.columns.length+'):</b> '+d.columns.join(', ')+'</div>' : '';
-
-    const body = d.meta?.mode==='wide' ? previewWide(d.preview) : kvPairs(d.preview_pairs);
-    rep.innerHTML = meta + miss + body + cols;
-  }
-
-  btnTpl.addEventListener('click', async ()=>{
-    try{
-      const r = await fetch('/template', { method:'GET', cache:'no-store' });
-      if(!r.ok){ const t=await r.text(); toast('Не удалось скачать шаблон: '+t,'err'); return; }
-      const b = await r.blob(); const url=URL.createObjectURL(b);
-      const a = document.createElement('a'); a.href=url; a.download='main_example.xlsx';
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      toast('Шаблон скачан', 'ok');
-    }catch(err){ toast('Ошибка скачивания: '+err,'err'); }
-  });
-
-  btnInstr.addEventListener('click', async ()=>{
-    try{
-      const r = await fetch('/instruction', { method:'GET', cache:'no-store' });
-      if(!r.ok){ const t=await r.text(); toast('Не удалось скачать инструкцию: '+t,'err'); return; }
-      const b = await r.blob(); const url=URL.createObjectURL(b);
-      const a = document.createElement('a'); a.href=url; a.download='instruction.docx';
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      toast('Инструкция скачана', 'ok');
-    }catch(err){ toast('Ошибка скачивания: '+err,'err'); }
-  });
-
-  btnI.addEventListener('click', inspect);
-
-  f.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const hasFile = file.files && file.files.length>0;
-    const hasGS = !!gs.value.trim();
-    if(!hasFile && !hasGS){ toast('Укажите Google Sheet ИЛИ выберите файл','err'); return; }
-    rep.innerHTML=''; btnI.disabled=btnG.disabled=true; spin.style.display='inline';
-    try{
-      const fd=new FormData(f); const r=await fetch('/generate',{method:'POST',body:fd}); const b=await r.blob();
-      if(!r.ok){ rep.innerHTML=''; toast(await b.text(),'err'); return; }
-      const url=URL.createObjectURL(b); const a=document.createElement('a'); a.href=url; a.download='generated_docs.zip';
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      toast('ZIP готов и скачан','ok');
-    } catch(err){
-      toast('Сетевая ошибка: '+err,'err');
+    try {
+      const resp = await fetch("/generate", {
+        method: "POST",
+        body: fd
+      });
+      if (!resp.ok) {
+        let msg = `HTTP ${resp.status}`;
+        try {
+          const data = await resp.json();
+          msg = data.detail || data.error || msg;
+        } catch (_) {}
+        throw new Error(msg);
+      }
+      const blob = await resp.blob();
+      blobDownload("generated_docs.zip", blob);
+    } catch (e) {
+      alert("Ошибка при генерации: " + e.message);
     } finally {
-      btnI.disabled=btnG.disabled=false; spin.style.display='none';
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = prevText;
     }
   });
-
-  // init
-  setSourceChip();
 </script>
+
+</body>
+</html>
 """
 
 # ============= Бизнес-логика =============
