@@ -12,7 +12,7 @@ from typing import Optional, Dict, Tuple, List
 
 import pandas as pd
 import requests
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Query
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
@@ -43,11 +43,13 @@ def slug_id(v: str) -> str:
         out.append(ch if (ch.isalnum() or ch in allowed) else "_")
     return re.sub(r"\s+", "_", "".join(out)).lower()
 
-# один раз навешиваем id на все шаблоны
+# один раз навешиваем id на все шаблоны (учитываем ПУТЬ, чтобы комплекты не пересекались)
 for idx, tpl in enumerate(TEMPLATES):
     if "id" not in tpl:
-        stem = Path(tpl["path"]).stem
-        tpl["id"] = slug_id(stem) or f"tpl_{idx:03d}"
+        # "input/first/дневник.docx" -> "input/first/дневник"
+        rel = tpl["path"].replace("\\", "/")
+        rel_no_ext = re.sub(r"\.[^.\\/]+$", "", rel)
+        tpl["id"] = slug_id(rel_no_ext) or f"tpl_{idx:03d}"
 
 @app.get("/catalog")
 def catalog(prefix: Optional[str] = None):
@@ -482,8 +484,35 @@ select option:hover {
   }
 
   // ==== старый функционал: скачать шаблон ====
-  document.getElementById("btnTemplate").addEventListener("click", () => {
-    window.location.href = "/template";
+  document.getElementById("btnTemplate").addEventListener("click", async () => {
+    const kit = directionSelect.value;
+    if (!kit) {
+      alert("Сначала выберите комплект");
+      return;
+    }
+
+    const checked = [...docsDiv.querySelectorAll('input[type="checkbox"]:checked')];
+    if (!checked.length) {
+      alert("Выберите хотя бы один документ из комплекта");
+      return;
+    }
+
+    const ids = checked.map(cb => cb.getAttribute("data-id"));
+    const url = "/template?include=" + encodeURIComponent(ids.join(","));
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const text = await resp.text();
+        alert("Ошибка при скачивании шаблона: " + text);
+        return;
+      }
+      const blob = await resp.blob();
+      // Имя можно поменять на своё, пока пусть будет как у старого шаблона
+      blobDownload("main_example.xlsx", blob);
+    } catch (e) {
+      alert("Сетевая ошибка при скачивании шаблона: " + e.message);
+    }
   });
 
   // ==== старый функционал: скачать инструкцию ====
@@ -492,28 +521,39 @@ select option:hover {
   });
 
   // ==== старый функционал: сгенерировать ZIP по таблице ====
+   // ==== генерация ZIP: ТОЛЬКО выбранный комплект и выбранные документы ====
   downloadBtn.addEventListener("click", async () => {
-    const dir = directionSelect.value;
-    if (!dir) return alert("Выберите направление!");
+    const kit = directionSelect.value;
+    if (!kit) {
+      alert("Выберите комплект!");
+      return;
+    }
 
-    const selectedDocs = [...docsDiv.querySelectorAll("input:checked")]
-      .map(i => i.nextSibling.textContent.trim());
+    // Собираем отмеченные документы в текущем комплекте
+    const checked = [...docsDiv.querySelectorAll('input[type="checkbox"]:checked')];
+    if (!checked.length) {
+      alert("Выберите хотя бы один документ из комплекта");
+      return;
+    }
+    const ids = checked.map(cb => cb.getAttribute("data-id"));
 
-    // (пока выбранные документы НИКАК не влияют на бэкенд — как ты и просил, новые фичи потом)
+    // Источник данных: файл или Google Sheet
     const hasFile = fileInput.files && fileInput.files[0];
     const gsheet = gsheetUrl.value.trim();
 
     if (!hasFile && !gsheet) {
-      return alert("Загрузите файл или вставьте ссылку на Google Sheet");
+      alert("Загрузите файл или вставьте ссылку на Google Sheet");
+      return;
     }
 
     const fd = new FormData();
     if (hasFile) {
-      fd.append("table_file", fileInput.files[0]);    // старое имя поля
+      fd.append("table_file", fileInput.files[0]);      // как и раньше
     } else {
-      fd.append("gsheet_url", gsheet);               // старое имя поля
+      fd.append("gsheet_url", gsheet);                 // как и раньше
     }
-    fd.append("header_row", "1");                     // как было в старом UI
+    fd.append("header_row", "1");                       // как в старом UI
+    fd.append("include", ids.join(","));                // КЛЮЧЕВОЕ: список id шаблонов
 
     const prevText = downloadBtn.textContent;
     downloadBtn.disabled = true;
@@ -608,13 +648,13 @@ def extract_record_from_upload(file: UploadFile, header_row: int) -> Tuple[Dict[
     df_wide, meta = read_wide_try(data, is_xlsx, header_row)
     if not df_wide.empty:
         cols = [str(c) for c in df_wide.columns]
-        sc = score_columns(cols)
-        if sc >= 3:
-            row = pick_first_nonempty_row(df_wide)
-            row_dict = {str(k): safe(v) for k, v in row.items()}
-            meta.update({"mode":"wide", "score": sc})
-            return row_dict, meta, cols
+        sc = score_columns(cols)  # теперь только для информации
+        row = pick_first_nonempty_row(df_wide)
+        row_dict = {str(k): safe(v) for k, v in row.items()}
+        meta.update({"mode": "wide", "score": sc})
+        return row_dict, meta, cols
 
+    # если df_wide пустой (совсем ничего не прочитали) — пробуем kv-режим
     kv, meta_kv = read_kv_from_raw(data, is_xlsx, 1, 2)
     meta_kv.setdefault("score", 0)
     return kv, meta_kv, None
@@ -643,32 +683,86 @@ def pick_first_nonempty_row(df: pd.DataFrame) -> pd.Series:
 
 # -------- шаблон Excel --------
 @app.get("/template")
-def download_template():
+def download_template(
+    include: Optional[str] = Query(default=None, description="CSV-список id шаблонов"),
+):
     """
-    Отдаём шаблон main_example.xlsx из корня проекта.
-    Если не найден — генерируем минимальный шаблон из полей templates_config.py.
-    Во всех случаях имя скачивания = main_example.xlsx. Кэш выключен.
+    Если include НЕ передан:
+        - отдаём готовый main_example.xlsx, если он есть
+        - иначе генерим Excel по ВСЕМ полям (как раньше).
+
+    Если include передан:
+        - игнорируем готовый файл
+        - генерим Excel только по выбранным шаблонам.
     """
-    for p in CANDIDATE_TEMPLATE_PATHS:
-        if p.exists():
-            return FileResponse(
-                str(p),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                filename=TEMPLATE_DOWNLOAD_NAME,
-                headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
-            )
-    # fallback
+    # Разбираем include -> набор id шаблонов
+    selected_ids = None
+    if include:
+        selected_ids = {
+            s.strip().lower()
+            for s in include.split(",")
+            if s.strip()
+        }
+
+    # === ВАРИАНТ 1: include НЕ передан — старое поведение ===
+    if not selected_ids:
+        for p in CANDIDATE_TEMPLATE_PATHS:
+            if p.exists():
+                return FileResponse(
+                    str(p),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    filename=TEMPLATE_DOWNLOAD_NAME,
+                    headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+                )
+
+        # fallback: Excel по всем полям всех шаблонов
+        headers_list: List[str] = []
+        seen = set()
+        for tpl in TEMPLATES:
+            for col in tpl["fields"].values():
+                if col not in seen:
+                    seen.add(col)
+                    headers_list.append(col)
+
+        df = pd.DataFrame([[""] * len(headers_list)], columns=headers_list)
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as w:
+            df.to_excel(w, sheet_name="Sheet1", index=False)
+        buf.seek(0)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{TEMPLATE_DOWNLOAD_NAME}"',
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+        )
+
+    # === ВАРИАНТ 2: include передан — только выбранные шаблоны ===
+    templates = [t for t in TEMPLATES if t["id"] in selected_ids]
+    if not templates:
+        raise HTTPException(
+            400,
+            detail=f"Не найдено ни одного шаблона для include={sorted(selected_ids)}",
+        )
+
     headers_list: List[str] = []
     seen = set()
-    for tpl in TEMPLATES:
+    for tpl in templates:
         for col in tpl["fields"].values():
             if col not in seen:
                 seen.add(col)
                 headers_list.append(col)
+
+    # хотя бы одна колонка должна быть
+    if not headers_list:
+        raise HTTPException(400, detail="У выбранных шаблонов нет ни одного поля")
+
     df = pd.DataFrame([[""] * len(headers_list)], columns=headers_list)
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
         df.to_excel(w, sheet_name="Sheet1", index=False)
+
     buf.seek(0)
     return StreamingResponse(
         buf,
@@ -806,6 +900,7 @@ def generate_zip(
     table_file: Optional[UploadFile] = File(default=None),
     gsheet_url: Optional[str] = Form(default=None),
     header_row: int = Form(default=1),
+    include: Optional[str] = Form(default=None), 
 ):
     if gsheet_url and gsheet_url.strip():
         record, meta, _ = extract_record_from_gsheet(gsheet_url.strip(), header_row)
@@ -817,9 +912,31 @@ def generate_zip(
     fio = safe(record.get("ФИО")) or "record"
     folder = slugify(f"001_{fio}")
 
+    selected_ids = None
+    if include:
+        selected_ids = {
+            s.strip().lower()
+            for s in include.split(",")
+            if s.strip()
+        }
+
+    templates = TEMPLATES
+    if selected_ids:
+        templates = [t for t in TEMPLATES if t.get("id") in selected_ids]
+        # если вдруг кто-то к нам постучался с левыми id — просто сгенерим пустой ZIP с ошибками
+        if not templates:
+            return JSONResponse(
+                {
+                    "error": "Ни один шаблон не совпал с include",
+                    "include": sorted(selected_ids),
+                    "available": [t["id"] for t in TEMPLATES],
+                },
+                status_code=400,
+            )
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for tpl in TEMPLATES:
+        for tpl in templates:
             try:
                 # контекст: {tpl_key: значение из record по названию колонки}
                 ctx = {tpl_key: safe(record.get(excel_col, "")) for tpl_key, excel_col in tpl["fields"].items()}
