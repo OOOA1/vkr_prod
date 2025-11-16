@@ -76,3 +76,4 @@ celerybeat.pid
 *.err
 tmp/
 temp/
+~$main.xlsx
