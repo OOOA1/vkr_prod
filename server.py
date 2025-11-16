@@ -21,6 +21,8 @@ from fastapi.responses import (
     FileResponse,
 )
 from docxtpl import DocxTemplate
+import jinja2
+JINJA_ENV = jinja2.Environment()
 
 # для генерации DOCX-инструкции (ставится вместе с docxtpl)
 from docx import Document
@@ -397,10 +399,10 @@ select option:hover {
   <label for="direction">Направление подготовки</label>
   <select id="direction">
     <option value="">— выберите комплект —</option>
-    <option value="kit1">Условный комплект 1</option>
+    <option value="kit1">Условный комплект 1(first)</option>
     <option value="kit2">Менеджмент УП экономика</option>
     <option value="kit3">Психология</option>
-    <option value="kit4">Условный комплект 4</option>
+    <option value="kit4">Условный комплект 4(new_docx11)</option>
     <!-- добавишь ещё, когда появятся новые наборы -->
   </select>
 
@@ -594,6 +596,22 @@ select option:hover {
 INVALID_FS = r'[<>:"/\\|?*]'
 
 def safe(v): return "" if (v is None or pd.isna(v)) else str(v).strip()
+
+def letter(value: str, index: int) -> str:
+    """
+    Берём строку (ФИО), убираем пробелы и возвращаем букву по индексу.
+    Если букв меньше либо индекс вне диапазона — вернём пустую строку.
+    """
+    s = safe(value or "")
+    # убираем пробелы и неразрывные пробелы
+    s = re.sub(r"\s+", "", s).replace("\xa0", "")
+    if not s:
+        return ""
+    if 0 <= index < len(s):
+        return s[index].upper()
+    return ""
+
+JINJA_ENV.filters["letter"] = letter
 
 class SafeMap(dict):
     def __missing__(self, key): return ""
@@ -956,7 +974,7 @@ def generate_zip(
                 # контекст: {tpl_key: значение из record по названию колонки}
                 ctx = {tpl_key: safe(record.get(excel_col, "")) for tpl_key, excel_col in tpl["fields"].items()}
                 doc = DocxTemplate(tpl["path"])
-                doc.render(ctx)
+                doc.render(ctx, jinja_env=JINJA_ENV)
 
                 # имя файла из шаблонной маски out
                 out_name = slugify(tpl["out"].format_map(SafeMap(record)) or "doc_001.docx")
