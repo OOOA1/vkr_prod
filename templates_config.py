@@ -198,7 +198,8 @@ TEMPLATES = [
             "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "RukOrg": "РукВУЗ",
             "initialStudent": "РасшифровкаСтудента",
-            "Date": "СегодняшняяДата"
+            "Date": "СегодняшняяДата",
+            "fio": "ФИО",
         }
     },
     {
@@ -314,6 +315,7 @@ TEMPLATES = [
             "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "RukOrg": "РукВУЗ",
             "initialStudent": "РасшифровкаСтудента",
+            "TwodaysBefPrak" : "ДвадняДоПрактикиБуднийДень",
         }
     },
     {
@@ -334,6 +336,8 @@ TEMPLATES = [
             "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "RukOrg": "РукВУЗ",
             "initialStudent": "РасшифровкаСтудента",
+            "initialRukOrg" : "ИнициалыРукОрг",
+            "orgBossDolj" : "ДолжностьРукОрг",
         }
     },
     {
@@ -345,7 +349,8 @@ TEMPLATES = [
             "fioRukProfOrgVP": "ФИОРукОТПрофОргВП",
             "dolj": "ДолжностьРукОТОрг",
             "burnOrgDate": "ДатаСозданияОрганизации",
-            "ustavProfOrg" : "УставПрофОрг",
+            "ustavProfOrg" : "НомерУставаПрофОрг",
+            "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "doljInstructions" : "ДолжностныеИнструкции",
             "UrAdrVUZ": "ЮрАдресПрофОрг",
             "INN": "ОргИНН",
@@ -405,6 +410,7 @@ TEMPLATES = [
             "Date": "СегодняшняяДата",
             "stydentPhoneNum" : "ТелефонСтудента",
             "studemail" : "ЭлПочтаСтудента",
+            "TwodaysBefPrak" : "ДвадняДоПрактикиБуднийДень",
         }
     },
     {
@@ -450,17 +456,21 @@ TEMPLATES = [
         "dir":  "психология",
         "out":  "Дневник_{ФИО}_{Группа}.docx",
         "fields": {
-            "praktikaTypeRP" : "ТипПрактикиРП",
+            "pr_type": "ТипПрактики",
             "vidPractiki": "ВидПрактика",
+            "fioVP" : "ФИОвВП",
             "kurs": "Курс",
             "group": "Группа",
-            "fioVP" : "ФИОвВП",
-            "org_name": "БазаПрактики",
+            "fio": "ФИО",
             "startPracticaDate": "НачалоПрактики",
             "endPracticaDate": "КонецПрактики",
+            "org_name": "БазаПрактики",
+            "UrAdrVUZ": "ЮрАдресПрофОрг",
             "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "RukOrg": "РукВУЗ",
             "initialStudent": "РасшифровкаСтудента",
+            "initialRukOrg" : "ИнициалыРукОрг",
+            "orgBossDolj" : "ДолжностьРукОрг",
         }
     },
     {
@@ -470,16 +480,18 @@ TEMPLATES = [
         "fields": {
             "org_name": "БазаПрактики",
             "fioRukProfOrgVP": "ФИОРукОТПрофОргВП",
-            "fioRukProfOrg": "ФИОРукОТПрофОрг",
             "dolj": "ДолжностьРукОТОрг",
             "burnOrgDate": "ДатаСозданияОрганизации",
-            "ustavProfOrg" : "УставПрофОрг",
+            "ustavProfOrg" : "НомерУставаПрофОрг",
+            "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "doljInstructions" : "ДолжностныеИнструкции",
             "UrAdrVUZ": "ЮрАдресПрофОрг",
             "INN": "ОргИНН",
             "fio": "ФИО",
             "group": "Группа",
             "faktAdrProfOrg" : "ФактАдрессПрофорг",
+            "orgBossVP" : "РуководительОргВП",
+            "orgBossDolj" : "ДолжностьРукОрг",
         }
     },
     {
@@ -523,6 +535,7 @@ TEMPLATES = [
             "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "RukOrg": "РукВУЗ",
             "fio": "ФИО",
+            "TwodaysBefPrak" : "ДвадняДоПрактикиБуднийДень",
         }
     },
     {
@@ -541,6 +554,7 @@ TEMPLATES = [
             "RukProfOrg": "ИнициалыРукОТПрофОрг",
             "RukOrg": "РукВУЗ",
             "initialStudent": "РасшифровкаСтудента",
+            "TwodaysBefPrak" : "ДвадняДоПрактикиБуднийДень",
 
         }
     },

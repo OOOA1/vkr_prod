@@ -611,7 +611,15 @@ def letter(value: str, index: int) -> str:
         return s[index].upper()
     return ""
 
+def lc(value: str) -> str:
+    """
+    Принудительно переводим строку в нижний регистр.
+    Используем в шаблоне как {{ Поле|lc }}.
+    """
+    return safe(value).lower()
+
 JINJA_ENV.filters["letter"] = letter
+JINJA_ENV.filters["lc"] = lc
 
 class SafeMap(dict):
     def __missing__(self, key): return ""
