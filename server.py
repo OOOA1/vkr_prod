@@ -29,6 +29,7 @@ from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment
 
 from templates_config import TEMPLATES, FIELD_GROUPS
 import unicodedata
@@ -788,15 +789,20 @@ def download_template(
         with pd.ExcelWriter(buf, engine="openpyxl") as w:
             df.to_excel(w, sheet_name="Sheet1", index=False)
 
-            # --- авто-подбор ширины колонок по заголовкам ---
             ws = w.sheets["Sheet1"]
+
+            # авто-подбор ширины колонок по заголовкам
             for col_idx, col_name in enumerate(headers_list, start=1):
                 col_letter = get_column_letter(col_idx)
                 header_val = ws.cell(row=1, column=col_idx).value
                 max_len = len(str(header_val)) if header_val is not None else 0
-                ws.column_dimensions[col_letter].width = max_len + 2
+                ws.column_dimensions[col_letter].width = max(max_len + 5, 15)
 
-        # ВАЖНО: перематываем ПОсле закрытия writer
+            # перенос текста во второй строке (строка с данными)
+            wrap_alignment = Alignment(wrap_text=True)
+            for cell in ws[2]:
+                cell.alignment = wrap_alignment
+
         buf.seek(0)
         return StreamingResponse(
             buf,
@@ -827,17 +833,21 @@ def download_template(
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
         df.to_excel(w, sheet_name="Sheet1", index=False)
 
-        # авто-подбор ширины колонок по заголовкам
         ws = w.sheets["Sheet1"]
+
+        # авто-подбор ширины колонок по заголовкам
         for col_idx, col_name in enumerate(headers_list, start=1):
             col_letter = get_column_letter(col_idx)
             header_val = ws.cell(row=1, column=col_idx).value
             max_len = len(str(header_val)) if header_val is not None else 0
-            ws.column_dimensions[col_letter].width = max_len + 2
+            ws.column_dimensions[col_letter].width = max(max_len + 5, 15)
 
-    # опять же — перематываем ПОСЛЕ закрытия writer
+        # перенос текста во второй строке (строка с данными)
+        wrap_alignment = Alignment(wrap_text=True)
+        for cell in ws[2]:
+            cell.alignment = wrap_alignment
+
     buf.seek(0)
-
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
