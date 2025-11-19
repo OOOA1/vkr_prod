@@ -802,6 +802,7 @@ def download_template(
             wrap_alignment = Alignment(wrap_text=True)
             for cell in ws[2]:
                 cell.alignment = wrap_alignment
+                cell.number_format = "@"  
 
         buf.seek(0)
         return StreamingResponse(
@@ -842,10 +843,11 @@ def download_template(
             max_len = len(str(header_val)) if header_val is not None else 0
             ws.column_dimensions[col_letter].width = max(max_len + 5, 15)
 
-        # перенос текста во второй строке (строка с данными)
+        # форматирование второй строки (все данные всегда текст + перенос строк)
         wrap_alignment = Alignment(wrap_text=True)
         for cell in ws[2]:
             cell.alignment = wrap_alignment
+            cell.number_format = "@"
 
     buf.seek(0)
     return StreamingResponse(
