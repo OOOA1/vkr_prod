@@ -30,7 +30,7 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from openpyxl.utils import get_column_letter
 
-from templates_config import TEMPLATES  # твои захардкоженные шаблоны
+from templates_config import TEMPLATES, FIELD_GROUPS
 import unicodedata
 
 app = FastAPI(title="Help University — DOCX → ZIP", version="3.6.0")
@@ -710,6 +710,41 @@ def pick_first_nonempty_row(df: pd.DataFrame) -> pd.Series:
             return row
     raise HTTPException(400, "Не найдена ни одна непустая строка с данными")
 
+# ==============    """ Собираем упорядоченный список колонок Excel: только те, которые реально нужны выбранным шаблонам; в порядке, заданном FIELD_GROUPS; остальные (не попавшие ни в одну группу) — в хвост. =======================================================
+
+
+def build_grouped_headers(templates) -> List[str]:
+
+    # 1. Какие поля вообще нужны, исходя из выбранных шаблонов
+    needed = set()
+    for tpl in templates:
+        for col in tpl["fields"].values():
+            needed.add(col)
+
+    headers_list: List[str] = []
+    seen = set()
+
+    # 2. Проходим по логическим группам
+    for group in FIELD_GROUPS:
+        group_fields = []
+        for col in group["fields"]:
+            if col in needed and col not in seen:
+                group_fields.append(col)
+
+        if not group_fields:
+            continue  # эта группа не нужна для текущего набора шаблонов
+
+        headers_list.extend(group_fields)
+        seen.update(group_fields)
+
+    # 3. Добираем оставшиеся поля, которые нигде не описаны в группах
+    for col in needed:
+        if col not in seen:
+            headers_list.append(col)
+            seen.add(col)
+
+    return headers_list
+
 # -------- шаблон Excel --------
 @app.get("/template")
 def download_template(
@@ -744,14 +779,8 @@ def download_template(
                     headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
                 )
 
-        # fallback: Excel по всем полям всех шаблонов
-        headers_list: List[str] = []
-        seen = set()
-        for tpl in TEMPLATES:
-            for col in tpl["fields"].values():
-                if col not in seen:
-                    seen.add(col)
-                    headers_list.append(col)
+        # fallback: Excel по всем полям всех шаблонов (с учётом логических групп)
+        headers_list = build_grouped_headers(TEMPLATES)
 
         df = pd.DataFrame([[""] * len(headers_list)], columns=headers_list)
 
@@ -763,13 +792,12 @@ def download_template(
             ws = w.sheets["Sheet1"]
             for col_idx, col_name in enumerate(headers_list, start=1):
                 col_letter = get_column_letter(col_idx)
-                # длина заголовка (можно расширить на другие строки, если понадобится)
                 header_val = ws.cell(row=1, column=col_idx).value
                 max_len = len(str(header_val)) if header_val is not None else 0
-                # слегка увеличим, чтобы было не впритык
                 ws.column_dimensions[col_letter].width = max_len + 2
 
-            buf.seek(0)
+        # ВАЖНО: перематываем ПОсле закрытия writer
+        buf.seek(0)
         return StreamingResponse(
             buf,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -787,13 +815,8 @@ def download_template(
             detail=f"Не найдено ни одного шаблона для include={sorted(selected_ids)}",
         )
 
-    headers_list: List[str] = []
-    seen = set()
-    for tpl in templates:
-        for col in tpl["fields"].values():
-            if col not in seen:
-                seen.add(col)
-                headers_list.append(col)
+    # поля только для выбранных шаблонов, отсортированные по логическим группам
+    headers_list = build_grouped_headers(templates)
 
     # хотя бы одна колонка должна быть
     if not headers_list:
@@ -804,7 +827,17 @@ def download_template(
     with pd.ExcelWriter(buf, engine="openpyxl") as w:
         df.to_excel(w, sheet_name="Sheet1", index=False)
 
+        # авто-подбор ширины колонок по заголовкам
+        ws = w.sheets["Sheet1"]
+        for col_idx, col_name in enumerate(headers_list, start=1):
+            col_letter = get_column_letter(col_idx)
+            header_val = ws.cell(row=1, column=col_idx).value
+            max_len = len(str(header_val)) if header_val is not None else 0
+            ws.column_dimensions[col_letter].width = max_len + 2
+
+    # опять же — перематываем ПОСЛЕ закрытия writer
     buf.seek(0)
+
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
