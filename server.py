@@ -31,7 +31,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 
-from templates_config import TEMPLATES, FIELD_GROUPS
+from templates_config import TEMPLATES
 import unicodedata
 
 app = FastAPI(title="Help University — DOCX → ZIP", version="3.6.0")
@@ -89,6 +89,16 @@ CANDIDATE_TEMPLATE_PATHS: List[Path] = [
     BASE_DIR / "main.xlsx",
     BASE_DIR / "main — копия.xlsx",
 ]
+
+# === Готовые Excel-шаблоны под каждый комплект ===
+# Папку "table_templates" создай рядом с server.py и положи туда свои 4 файла.
+# Ключи (kit1, kit2, ...) ДОЛЖНЫ совпадать со значениями <option value="..."> в <select id="direction">.
+KIT_TEMPLATES: Dict[str, Path] = {
+    "kit1": BASE_DIR / "table_templates" / "First шаблон.xlsx",
+    "kit2": BASE_DIR / "table_templates" / "Менеджмент УП экономика шаблон.xlsx",
+    "kit3": BASE_DIR / "table_templates" / "Психология шаблон.xlsx",
+    "kit4": BASE_DIR / "table_templates" / "docx11 шаблон.xlsx",
+}
 
 # === Настройки выдачи Инструкции ===
 INSTRUCTION_DOWNLOAD_NAME = "instruction.docx"
@@ -428,6 +438,15 @@ select option:hover {
     kit4: "input/new_docx11/",
   };
 
+  // НОВОЕ: соответствие "комплект → имя Excel-шаблона"
+  // Здесь должны быть ТОЧНО такие же имена, как в KIT_TEMPLATES на бэкенде.
+  const kitTemplateNames = {
+    kit1: "First шаблон",
+    kit2: "Менеджмент УП экономика шаблон",
+    kit3: "Психология.xlsx",
+    kit4: "docx11 шаблон",
+  };
+
   const directionSelect = document.getElementById("direction");
   const docsDiv = document.getElementById("docs");
   const downloadBtn = document.getElementById("downloadBtn");
@@ -462,9 +481,10 @@ select option:hover {
       }
 
       items.forEach(doc => {
-        const item = document.createElement("label");
+        const item = document.createElement("div");
         item.className = "doc-item";
-        item.innerHTML = `<input type="checkbox" checked data-id="${doc.id}"> <span>${doc.title}</span>`;
+        item.dataset.id = doc.id;
+        item.textContent = doc.title;
         docsDiv.appendChild(item);
       });
     } catch (e) {
@@ -489,7 +509,7 @@ select option:hover {
     URL.revokeObjectURL(url);
   }
 
-  // ==== старый функционал: скачать шаблон ====
+   // ==== скачать шаблон ТОЛЬКО по выбранному комплекту (без генерации по полям) ====
   document.getElementById("btnTemplate").addEventListener("click", async () => {
     const kit = directionSelect.value;
     if (!kit) {
@@ -497,14 +517,8 @@ select option:hover {
       return;
     }
 
-    const checked = [...docsDiv.querySelectorAll('input[type="checkbox"]:checked')];
-    if (!checked.length) {
-      alert("Выберите хотя бы один документ из комплекта");
-      return;
-    }
-
-    const ids = checked.map(cb => cb.getAttribute("data-id"));
-    const url = "/template?include=" + encodeURIComponent(ids.join(","));
+    // теперь отправляем только id комплекта, а не список документов
+    const url = "/template?kit=" + encodeURIComponent(kit);
 
     try {
       const resp = await fetch(url);
@@ -513,9 +527,12 @@ select option:hover {
         alert("Ошибка при скачивании шаблона: " + text);
         return;
       }
+
       const blob = await resp.blob();
-      // Имя можно поменять на своё, пока пусть будет как у старого шаблона
-      blobDownload("main_example.xlsx", blob);
+
+      // имя файла берём из словаря, чтобы совпадало с реальным шаблоном
+      const filename = kitTemplateNames[kit] || "template.xlsx";
+      blobDownload(filename, blob);
     } catch (e) {
       alert("Сетевая ошибка при скачивании шаблона: " + e.message);
     }
@@ -535,13 +552,15 @@ select option:hover {
       return;
     }
 
-    // Собираем отмеченные документы в текущем комплекте
-    const checked = [...docsDiv.querySelectorAll('input[type="checkbox"]:checked')];
-    if (!checked.length) {
-      alert("Выберите хотя бы один документ из комплекта");
+    // Берём все документы текущего комплекта (без галочек — все пойдут в ZIP)
+    const items = [...docsDiv.querySelectorAll('.doc-item')];
+    if (!items.length) {
+      alert("В этом комплекте нет документов");
       return;
     }
-    const ids = checked.map(cb => cb.getAttribute("data-id"));
+    const ids = items
+      .map(el => el.dataset.id)
+      .filter(Boolean);
 
     // Источник данных: файл или Google Sheet
     const hasFile = fileInput.files && fileInput.files[0];
@@ -711,152 +730,35 @@ def pick_first_nonempty_row(df: pd.DataFrame) -> pd.Series:
             return row
     raise HTTPException(400, "Не найдена ни одна непустая строка с данными")
 
-# ==============    """ Собираем упорядоченный список колонок Excel: только те, которые реально нужны выбранным шаблонам; в порядке, заданном FIELD_GROUPS; остальные (не попавшие ни в одну группу) — в хвост. =======================================================
-
-
-def build_grouped_headers(templates) -> List[str]:
-
-    # 1. Какие поля вообще нужны, исходя из выбранных шаблонов
-    needed = set()
-    for tpl in templates:
-        for col in tpl["fields"].values():
-            needed.add(col)
-
-    headers_list: List[str] = []
-    seen = set()
-
-    # 2. Проходим по логическим группам
-    for group in FIELD_GROUPS:
-        group_fields = []
-        for col in group["fields"]:
-            if col in needed and col not in seen:
-                group_fields.append(col)
-
-        if not group_fields:
-            continue  # эта группа не нужна для текущего набора шаблонов
-
-        headers_list.extend(group_fields)
-        seen.update(group_fields)
-
-    # 3. Добираем оставшиеся поля, которые нигде не описаны в группах
-    for col in needed:
-        if col not in seen:
-            headers_list.append(col)
-            seen.add(col)
-
-    return headers_list
-
 # -------- шаблон Excel --------
 @app.get("/template")
 def download_template(
-    include: Optional[str] = Query(default=None, description="CSV-список id шаблонов"),
+    kit: Optional[str] = Query(
+        default=None,
+        description="id комплекта (kit1, kit2, kit3, kit4)",
+    ),
+    include: Optional[str] = Query(
+        default=None,
+        description="CSV-список id шаблонов (старый режим, можно не использовать)",
+    ),
 ):
-    """
-    Если include НЕ передан:
-        - отдаём готовый main_example.xlsx, если он есть
-        - иначе генерим Excel по ВСЕМ полям (как раньше).
-
-    Если include передан:
-        - игнорируем готовый файл
-        - генерим Excel только по выбранным шаблонам.
-    """
-    # Разбираем include -> набор id шаблонов
-    selected_ids = None
-    if include:
-        selected_ids = {
-            s.strip().lower()
-            for s in include.split(",")
-            if s.strip()
-        }
-
-    # === ВАРИАНТ 1: include НЕ передан — старое поведение ===
-    if not selected_ids:
-        for p in CANDIDATE_TEMPLATE_PATHS:
-            if p.exists():
-                return FileResponse(
-                    str(p),
-                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    filename=TEMPLATE_DOWNLOAD_NAME,
-                    headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
-                )
-
-        # fallback: Excel по всем полям всех шаблонов (с учётом логических групп)
-        headers_list = build_grouped_headers(TEMPLATES)
-
-        df = pd.DataFrame([[""] * len(headers_list)], columns=headers_list)
-
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as w:
-            df.to_excel(w, sheet_name="Sheet1", index=False)
-
-            ws = w.sheets["Sheet1"]
-
-            # авто-подбор ширины колонок по заголовкам
-            for col_idx, col_name in enumerate(headers_list, start=1):
-                col_letter = get_column_letter(col_idx)
-                header_val = ws.cell(row=1, column=col_idx).value
-                max_len = len(str(header_val)) if header_val is not None else 0
-                ws.column_dimensions[col_letter].width = max(max_len + 5, 15)
-
-            # перенос текста во второй строке (строка с данными)
-            wrap_alignment = Alignment(wrap_text=True)
-            for cell in ws[2]:
-                cell.alignment = wrap_alignment
-                cell.number_format = "@"  
-
-        buf.seek(0)
-        return StreamingResponse(
-            buf,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{TEMPLATE_DOWNLOAD_NAME}"',
-                "Cache-Control": "no-store, no-cache, must-revalidate",
-            },
-        )
-
-    # === ВАРИАНТ 2: include передан — только выбранные шаблоны ===
-    templates = [t for t in TEMPLATES if t["id"] in selected_ids]
-    if not templates:
+    kit = kit.strip()
+    path = KIT_TEMPLATES.get(kit)
+    if not path:
         raise HTTPException(
             400,
-            detail=f"Не найдено ни одного шаблона для include={sorted(selected_ids)}",
+            detail=f"Неизвестный комплект: {kit}",
+        )
+    if not path.is_file():
+        raise HTTPException(
+            500,
+            detail=f"Файл шаблона для комплекта {kit} не найден по пути {path}",
         )
 
-    # поля только для выбранных шаблонов, отсортированные по логическим группам
-    headers_list = build_grouped_headers(templates)
-
-    # хотя бы одна колонка должна быть
-    if not headers_list:
-        raise HTTPException(400, detail="У выбранных шаблонов нет ни одного поля")
-
-    df = pd.DataFrame([[""] * len(headers_list)], columns=headers_list)
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df.to_excel(w, sheet_name="Sheet1", index=False)
-
-        ws = w.sheets["Sheet1"]
-
-        # авто-подбор ширины колонок по заголовкам
-        for col_idx, col_name in enumerate(headers_list, start=1):
-            col_letter = get_column_letter(col_idx)
-            header_val = ws.cell(row=1, column=col_idx).value
-            max_len = len(str(header_val)) if header_val is not None else 0
-            ws.column_dimensions[col_letter].width = max(max_len + 5, 15)
-
-        # форматирование второй строки (все данные всегда текст + перенос строк)
-        wrap_alignment = Alignment(wrap_text=True)
-        for cell in ws[2]:
-            cell.alignment = wrap_alignment
-            cell.number_format = "@"
-
-    buf.seek(0)
-    return StreamingResponse(
-        buf,
+    return FileResponse(
+        path,
+        filename=path.name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f'attachment; filename="{TEMPLATE_DOWNLOAD_NAME}"',
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
     )
 
 # -------- инструкция DOCX --------
