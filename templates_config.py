@@ -407,6 +407,7 @@ TEMPLATES = [
             "group": "Группа",
             # "tel": "телефон",
             "studEmail": "emailстуд",
+            "kafedraName" : "КафедраНазвание",
             "initialRukVRK": "ИницРукВКР",
             "stepenNauchRuk": "СтепеньНаучРук",
             "ZvanieNauchRuk": "ЗваниеНаучРук",
