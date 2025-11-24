@@ -1,2 +1,4 @@
 uvicorn server:app --host 0.0.0.0 --port 8000 --reload -- старт сервера
 http://localhost:8000/ -- локальная ссылка для разработки
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\venv\Scripts\python.exe -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload

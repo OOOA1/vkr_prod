@@ -303,6 +303,7 @@ TEMPLATES = [
             "kurs": "Курс",
             "group": "Группа",
             "naprPodg": "направлениеПодготовки",
+            "kafedra": "направленность (кафедра)",
             "startPracticaDate": "НачалоПрактики",
             "endPracticaDate": "КонецПрактики",
             "org_name": "БазаПрактики",
@@ -327,6 +328,9 @@ TEMPLATES = [
             "kurs": "Курс",
             "group": "Группа",
             "fio": "ФИО",
+            "naprPodg": "направлениеПодготовки",
+            "kafedra": "направленность (кафедра)",
+            "kafedraName" : "КафедраНазвание",
             "startPracticaDate": "НачалоПрактики",
             "endPracticaDate": "КонецПрактики",
             "org_name": "БазаПрактики",
@@ -360,6 +364,8 @@ TEMPLATES = [
             "orgBoss" : "ИнициалыВладельца",
             "orgBossDolj" : "ДолжностьВладельцаРП",
             "OrgBossdoljIP" : "ДолжностьВладельца",
+            "startPracticaDate": "НачалоПрактики",
+            "endPracticaDate": "КонецПрактики",
         }
     },
     {
@@ -384,6 +390,9 @@ TEMPLATES = [
             "RukProfOrg": "ИнициалыРукОТПредпр",
             "initialStudent": "ИнициалыСтудента",
             "monthBefPraktika" : "ДатаЗаМесяцДоНачПракт",
+            "zavKaf": "Фамилия И.О. зав кафедры",
+            "naprPodg": "направлениеПодготовки",
+            "kafedra": "направленность (кафедра)",
         }
     },
     {
