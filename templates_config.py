@@ -486,7 +486,7 @@ TEMPLATES = [
         "out":  "Договор_{ФИО}_{Группа}.docx",
         "fields": {
             "org_name": "БазаПрактики",
-            # "fioRukProfOrgVP": "ФИОРукОТПрофОргВП",
+            # "fioRukProfOrgVP": "ФИОРукОТПрофОргВП", 
             "dolj": "ДолжностьРукОТОрг",
             "burnOrgDate": "ДатаСозданияОрганизации",
             "ustavProfOrg" : "НомерУставаПрофОрг",
