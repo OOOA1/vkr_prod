@@ -96,7 +96,7 @@ CANDIDATE_TEMPLATE_PATHS: List[Path] = [
 KIT_TEMPLATES: Dict[str, Path] = {
     "kit1": BASE_DIR / "table_templates" / "First шаблон.xlsx",
     "kit2": BASE_DIR / "table_templates" / "Менеджмент УП экономика шаблон.xlsx",
-    "kit3": BASE_DIR / "table_templates" / "Психология шаблон.xlsx",
+    "kit3": BASE_DIR / "table_templates" / "Реклама, лингвистика, журналистика, ГМУ шаблон.xlsx",
     "kit4": BASE_DIR / "table_templates" / "docx11 шаблон.xlsx",
 }
 
@@ -412,7 +412,7 @@ select option:hover {
     <option value="">— выберите комплект —</option>
     <option value="kit1">Условный комплект 1(first)</option>
     <option value="kit2">Менеджмент УП экономика</option>
-    <option value="kit3">Психология</option>
+    <option value="kit3">Реклама, лингвистика, журналистика, ГМУ</option>
     <option value="kit4">Условный комплект 4(new_docx11)</option>
     <!-- добавишь ещё, когда появятся новые наборы -->
   </select>
@@ -434,7 +434,7 @@ select option:hover {
     // kitn: "input/new_docx11111/",
     kit1: "input/first/",
     kit2: "input/менеджмент_УП_экономика",
-    kit3: "input/психология",
+    kit3: "input/Реклама, лингвистика, журналистика, ГМУ",
     kit4: "input/new_docx11/",
   };
 
@@ -443,7 +443,7 @@ select option:hover {
   const kitTemplateNames = {
     kit1: "First шаблон",
     kit2: "Менеджмент УП экономика шаблон",
-    kit3: "Психология.xlsx",
+    kit3: "Реклама, лингвистика, журналистика, ГМУ.xlsx",
     kit4: "docx11 шаблон",
   };
 
@@ -638,8 +638,16 @@ def lc(value: str) -> str:
     """
     return safe(value).lower()
 
+def uc(value: str) -> str:
+    """
+    Переводит строку в ВЕРХНИЙ регистр.
+    Использование в шаблоне: {{ Поле|uc }}
+    """
+    return safe(value).upper()
+
 JINJA_ENV.filters["letter"] = letter
 JINJA_ENV.filters["lc"] = lc
+JINJA_ENV.filters["uc"] = uc
 
 class SafeMap(dict):
     def __missing__(self, key): return ""
