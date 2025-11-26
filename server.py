@@ -671,28 +671,20 @@ SOFFICE_BIN = os.getenv("SOFFICE_BIN", "soffice")  # на Windows можно у�
 def docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
     """
     Конвертирует DOCX (bytes) -> PDF (bytes) через LibreOffice (soffice --headless).
+    Используем тот же стиль, как ты запускал вручную из консоли.
     """
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
 
         in_path = td / "input.docx"
         out_dir = td / "out"
-        profile_dir = td / "lo_profile"
 
         out_dir.mkdir(parents=True, exist_ok=True)
-        profile_dir.mkdir(parents=True, exist_ok=True)
-
         in_path.write_bytes(docx_bytes)
 
-        # отдельный профиль, чтобы не было блокировок при параллельных запросах
-        user_install = profile_dir.as_uri()  # file:///...
         cmd = [
             SOFFICE_BIN,
             "--headless",
-            "--nologo",
-            "--nolockcheck",
-            "--norestore",
-            f"-env:UserInstallation={user_install}",
             "--convert-to", "pdf",
             "--outdir", str(out_dir),
             str(in_path),
@@ -705,11 +697,14 @@ def docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
             text=True,
         )
 
-        pdf_path = out_dir / "input.pdf"
-        if proc.returncode != 0 or not pdf_path.exists():
+        # Ищем любой PDF, который LibreOffice сгенерировал
+        pdf_files = list(out_dir.glob("*.pdf"))
+
+        if proc.returncode != 0 or not pdf_files:
             raise RuntimeError("LibreOffice DOCX→PDF failed:\n" + (proc.stdout or ""))
 
-        return pdf_path.read_bytes()
+        # Берём первый найденный PDF
+        return pdf_files[0].read_bytes()
 
 def _norm(s: str) -> str:
     return re.sub(r"\s+", "", str(s)).replace("\ufeff","").replace("\xa0","").replace("ё","е").lower()
