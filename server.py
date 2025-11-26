@@ -784,6 +784,95 @@ def pick_first_nonempty_row(df: pd.DataFrame) -> pd.Series:
             return row
     raise HTTPException(400, "Не найдена ни одна непустая строка с данными")
 
+def records_from_wide_df(df: pd.DataFrame) -> Tuple[List[Dict[str, str]], list]:
+    """
+    Превращаем «широкий» df (несколько строк студентов) в список словарей.
+    Первая непустая строка — базовая, для следующих строк пустые ячейки
+    берём из неё.
+    """
+    df = df.fillna("")
+    cols = [str(c) for c in df.columns]
+
+    base_row: Optional[Dict[str, str]] = None
+    records: List[Dict[str, str]] = []
+
+    for _, row in df.iterrows():
+        raw = {str(k): safe(v) for k, v in row.items()}
+
+        # если строка полностью пустая — пропускаем
+        if not any(raw.values()):
+            continue
+
+        if base_row is None:
+            # это ПЕРВАЯ строка с данными — считаем её общей базой
+            base_row = raw
+            records.append(base_row)
+        else:
+            # для следующих строк: если ячейка пустая — берём из base_row
+            merged: Dict[str, str] = {}
+            for c in cols:
+                v = raw.get(c, "")
+                if not v and base_row is not None:
+                    v = base_row.get(c, "")
+                merged[c] = v
+
+            if any(merged.values()):
+                records.append(merged)
+
+    if not records:
+        raise HTTPException(400, "Не найдена ни одна непустая строка с данными")
+
+    return records, cols
+
+
+def extract_records_from_upload_multi(
+    file: UploadFile,
+    header_row: int,
+) -> Tuple[List[Dict[str, str]], Dict, Optional[list]]:
+    """
+    Версия extract_record_from_upload, но возвращает СПИСОК записей (по студентам).
+    """
+    data = file.file.read()
+    name = (file.filename or "").lower()
+    is_xlsx = name.endswith(".xlsx")
+    if not (is_xlsx or name.endswith(".csv")):
+        raise HTTPException(400, "Поддерживаются только .xlsx или .csv")
+
+    df_wide, meta = read_wide_try(data, is_xlsx, header_row)
+    if not df_wide.empty:
+        records, cols = records_from_wide_df(df_wide)
+        sc = score_columns(cols)
+        meta.update({"mode": "wide", "score": sc})
+        return records, meta, cols
+
+    # если wide-режим ничего не дал — используем старый kv-режим (одна запись)
+    kv, meta_kv = read_kv_from_raw(data, is_xlsx, 1, 2)
+    meta_kv.setdefault("score", 0)
+    return [kv], meta_kv, None
+
+
+def extract_records_from_gsheet_multi(
+    url: str,
+    header_row: int,
+) -> Tuple[List[Dict[str, str]], Dict, Optional[list]]:
+    """
+    То же самое, что extract_record_from_gsheet, но возвращает список записей.
+    """
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url or "")
+    if not m:
+        raise HTTPException(400, "Не удалось извлечь spreadsheetId из URL")
+    spreadsheet_id = m.group(1)
+    gid_match = re.search(r"[#&?]gid=([0-9]+)", url)
+    gid = int(gid_match.group(1)) if gid_match else 0
+    export = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+    resp = requests.get(export, timeout=30)
+    if resp.status_code != 200:
+        raise HTTPException(400, f"Google Sheets недоступен (HTTP {resp.status_code})")
+    upl = UploadFile(filename="gs.csv", file=io.BytesIO(resp.content))
+    records, meta, cols = extract_records_from_upload_multi(upl, header_row)
+    meta.update({"source": "gsheet", "gid": gid})
+    return records, meta, cols
+
 # -------- шаблон Excel --------
 @app.get("/template")
 def download_template(
@@ -942,18 +1031,20 @@ def generate_zip(
     table_file: Optional[UploadFile] = File(default=None),
     gsheet_url: Optional[str] = Form(default=None),
     header_row: int = Form(default=1),
-    include: Optional[str] = Form(default=None), 
+    include: Optional[str] = Form(default=None),
 ):
+    # 1) читаем ТАБЛИЦУ: теперь получаем СПИСОК записей (по студентам)
     if gsheet_url and gsheet_url.strip():
-        record, meta, _ = extract_record_from_gsheet(gsheet_url.strip(), header_row)
+        records, meta, _ = extract_records_from_gsheet_multi(gsheet_url.strip(), header_row)
     elif table_file and (table_file.filename or "").strip():
-        record, meta, _ = extract_record_from_upload(table_file, header_row)
+        records, meta, _ = extract_records_from_upload_multi(table_file, header_row)
     else:
         raise HTTPException(400, "Укажите Google Sheet ИЛИ выберите файл")
 
-    fio = safe(record.get("ФИО")) or "record"
-    folder = slugify(f"001_{fio}")
+    if not records:
+        raise HTTPException(400, "Не найдено ни одной строки с данными")
 
+    # 2) фильтрация шаблонов через include (как и раньше)
     selected_ids = None
     if include:
         selected_ids = {
@@ -964,71 +1055,78 @@ def generate_zip(
 
     templates = TEMPLATES
     if selected_ids:
-        templates = [t for t in TEMPLATES if t.get("id") in selected_ids]
-        # если вдруг кто-то к нам постучался с левыми id — просто сгенерим пустой ZIP с ошибками
-        if not templates:
-            return JSONResponse(
-                {
-                    "error": "Ни один шаблон не совпал с include",
-                    "include": sorted(selected_ids),
-                    "available": [t["id"] for t in TEMPLATES],
-                },
-                status_code=400,
-            )
+        templates = [
+            t for t in TEMPLATES
+            if t.get("id") and t["id"].lower() in selected_ids
+        ]
 
+    # 3) собираем ZIP: одна ПАПКА на каждого студента
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for tpl in templates:
-            try:
-                # контекст: {tpl_key: значение из record по названию колонки}
-                ctx = {tpl_key: safe(record.get(excel_col, "")) for tpl_key, excel_col in tpl["fields"].items()}
-                doc = DocxTemplate(tpl["path"])
-                doc.render(ctx, jinja_env=JINJA_ENV)
+        for idx, record in enumerate(records, start=1):
+            # имя папки вида "001_Иванов Иван Иванович"
+            fio = safe(record.get("ФИО")) or f"record_{idx:03d}"
+            folder = slugify(f"{idx:03d}_{fio}")
 
-                # рендерим DOCX в память
-                out_mem = io.BytesIO()
-                doc.save(out_mem)
-                docx_bytes = out_mem.getvalue()
+            for tpl in templates:
+                try:
+                    # контекст: {tpl_key: значение из record по названию колонки}
+                    ctx = {
+                        tpl_key: safe(record.get(excel_col, ""))
+                        for tpl_key, excel_col in tpl["fields"].items()
+                    }
+                    doc = DocxTemplate(tpl["path"])
+                    doc.render(ctx, jinja_env=JINJA_ENV)
 
-                # имя файла из шаблонной маски out
-                out_name = slugify(tpl["out"].format_map(SafeMap(record)) or "doc_001.docx")
+                    # рендерим DOCX в память
+                    out_mem = io.BytesIO()
+                    doc.save(out_mem)
+                    docx_bytes = out_mem.getvalue()
 
-                # формат выхода: по умолчанию docx, но для выбранных шаблонов = pdf
-                output = (tpl.get("output") or "docx").strip().lower()
-                if output == "pdf":
-                    # гарантируем расширение .pdf
-                    if out_name.lower().endswith(".docx"):
-                        out_name = out_name[:-5] + ".pdf"
-                    elif not out_name.lower().endswith(".pdf"):
-                        out_name += ".pdf"
+                    # имя файла из шаблонной маски out
+                    out_name = slugify(
+                        tpl["out"].format_map(SafeMap(record)) or "doc_001.docx"
+                    )
 
-                # собираем путь внутри архива (с учётом подпапки dir)
-                subdir_raw = (tpl.get("dir") or "").strip()
-                if subdir_raw:
-                    subdir_filled = slugify_path(subdir_raw.format_map(SafeMap(record)))
-                    arcname = "/".join([folder, subdir_filled, out_name])
-                else:
-                    arcname = "/".join([folder, out_name])
+                    # формат выхода: docx или pdf
+                    output = (tpl.get("output") or "docx").strip().lower()
+                    if output == "pdf":
+                        if out_name.lower().endswith(".docx"):
+                            out_name = out_name[:-5] + ".pdf"
+                        elif not out_name.lower().endswith(".pdf"):
+                            out_name += ".pdf"
 
-                # пишем либо pdf, либо docx
-                if output == "pdf":
-                    pdf_bytes = docx_bytes_to_pdf_bytes(docx_bytes)
-                    zf.writestr(arcname, pdf_bytes)
-                else:
-                    # гарантируем расширение .docx
-                    if not out_name.lower().endswith(".docx"):
-                        # (на случай если в конфиге забыли расширение)
-                        arcname = arcname + ".docx"
-                    zf.writestr(arcname, docx_bytes)
-            except Exception as e:
-                err = slugify(tpl.get("out","file")) + ".ERROR.txt"
-                zf.writestr(f"{folder}/{err}", f"Ошибка ({tpl['path']}): {type(e).__name__}: {e}")
+                    # путь внутри архива (dir → подпапка внутри папки студента)
+                    subdir_raw = (tpl.get("dir") or "").strip()
+                    if subdir_raw:
+                        subdir_filled = slugify_path(
+                            subdir_raw.format_map(SafeMap(record))
+                        )
+                        arcname = "/".join([folder, subdir_filled, out_name])
+                    else:
+                        arcname = "/".join([folder, out_name])
+
+                    # пишем либо pdf, либо docx
+                    if output == "pdf":
+                        pdf_bytes = docx_bytes_to_pdf_bytes(docx_bytes)
+                        zf.writestr(arcname, pdf_bytes)
+                    else:
+                        if not out_name.lower().endswith(".docx"):
+                            arcname = arcname + ".docx"
+                        zf.writestr(arcname, docx_bytes)
+
+                except Exception as e:
+                    err = slugify(tpl.get("out", "file")) + ".ERROR.txt"
+                    zf.writestr(
+                        f"{folder}/{err}",
+                        f"Ошибка ({tpl['path']}): {type(e).__name__}: {e}",
+                    )
 
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="generated_docs.zip"'}
+        headers={"Content-Disposition": 'attachment; filename="generated_docs.zip"'},
     )
 
 @app.get("/healthz")
