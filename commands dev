@@ -5,13 +5,16 @@ http://localhost:8000/ -- локальная ссылка для разрабо�
 
 /////////Работа с ВДС//////////////
 
-sudo -u app -H bash -lc '
 cd /opt/vkr_prod
+
+# подтянуть свежий код
 git fetch origin
-git reset --hard origin/main      # если у тебя ветка master — замени main на master
+git reset --hard origin/main   # или origin/master, если ветка master
+
+# обновить зависимости
 source venv/bin/activate
 pip install -r requirements.txt
-'
 
-systemctl restart vkr_prod
-systemctl status vkr_prod --no-pager
+# перезапустить сервис
+sudo systemctl restart vkr.service
+sudo systemctl status vkr.service --no-pager
