@@ -10,6 +10,10 @@ import zipfile
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
 
+import os
+import tempfile
+import subprocess
+
 import pandas as pd
 import requests
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Query
@@ -33,6 +37,8 @@ from openpyxl.styles import Alignment
 
 from templates_config import TEMPLATES
 import unicodedata
+
+
 
 app = FastAPI(title="Help University — DOCX → ZIP", version="3.6.0")
 
@@ -660,6 +666,51 @@ def slugify_path(path: str) -> str:
     parts = [slugify(p) for p in parts if p and p.strip()]
     return "/".join(parts)
 
+SOFFICE_BIN = os.getenv("SOFFICE_BIN", "soffice")  # на Windows можно указать полный путь до soffice.exe
+
+def docx_bytes_to_pdf_bytes(docx_bytes: bytes) -> bytes:
+    """
+    Конвертирует DOCX (bytes) -> PDF (bytes) через LibreOffice (soffice --headless).
+    """
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+
+        in_path = td / "input.docx"
+        out_dir = td / "out"
+        profile_dir = td / "lo_profile"
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        profile_dir.mkdir(parents=True, exist_ok=True)
+
+        in_path.write_bytes(docx_bytes)
+
+        # отдельный профиль, чтобы не было блокировок при параллельных запросах
+        user_install = profile_dir.as_uri()  # file:///...
+        cmd = [
+            SOFFICE_BIN,
+            "--headless",
+            "--nologo",
+            "--nolockcheck",
+            "--norestore",
+            f"-env:UserInstallation={user_install}",
+            "--convert-to", "pdf",
+            "--outdir", str(out_dir),
+            str(in_path),
+        ]
+
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        pdf_path = out_dir / "input.pdf"
+        if proc.returncode != 0 or not pdf_path.exists():
+            raise RuntimeError("LibreOffice DOCX→PDF failed:\n" + (proc.stdout or ""))
+
+        return pdf_path.read_bytes()
+
 def _norm(s: str) -> str:
     return re.sub(r"\s+", "", str(s)).replace("\ufeff","").replace("\xa0","").replace("ё","е").lower()
 
@@ -939,10 +990,24 @@ def generate_zip(
                 doc = DocxTemplate(tpl["path"])
                 doc.render(ctx, jinja_env=JINJA_ENV)
 
+                # рендерим DOCX в память
+                out_mem = io.BytesIO()
+                doc.save(out_mem)
+                docx_bytes = out_mem.getvalue()
+
                 # имя файла из шаблонной маски out
                 out_name = slugify(tpl["out"].format_map(SafeMap(record)) or "doc_001.docx")
 
-                # подпапка (опционально)
+                # формат выхода: по умолчанию docx, но для выбранных шаблонов = pdf
+                output = (tpl.get("output") or "docx").strip().lower()
+                if output == "pdf":
+                    # гарантируем расширение .pdf
+                    if out_name.lower().endswith(".docx"):
+                        out_name = out_name[:-5] + ".pdf"
+                    elif not out_name.lower().endswith(".pdf"):
+                        out_name += ".pdf"
+
+                # собираем путь внутри архива (с учётом подпапки dir)
                 subdir_raw = (tpl.get("dir") or "").strip()
                 if subdir_raw:
                     subdir_filled = slugify_path(subdir_raw.format_map(SafeMap(record)))
@@ -950,8 +1015,16 @@ def generate_zip(
                 else:
                     arcname = "/".join([folder, out_name])
 
-                out_mem = io.BytesIO(); doc.save(out_mem)
-                zf.writestr(arcname, out_mem.getvalue())
+                # пишем либо pdf, либо docx
+                if output == "pdf":
+                    pdf_bytes = docx_bytes_to_pdf_bytes(docx_bytes)
+                    zf.writestr(arcname, pdf_bytes)
+                else:
+                    # гарантируем расширение .docx
+                    if not out_name.lower().endswith(".docx"):
+                        # (на случай если в конфиге забыли расширение)
+                        arcname = arcname + ".docx"
+                    zf.writestr(arcname, docx_bytes)
             except Exception as e:
                 err = slugify(tpl.get("out","file")) + ".ERROR.txt"
                 zf.writestr(f"{folder}/{err}", f"Ошибка ({tpl['path']}): {type(e).__name__}: {e}")
