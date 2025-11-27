@@ -416,10 +416,10 @@ select option:hover {
   <label for="direction">Направление подготовки</label>
   <select id="direction">
     <option value="">— выберите комплект —</option>
-    <option value="kit1">Условный комплект 1(first)</option>
+    <option value="kit1">Старые бланки</option>
     <option value="kit2">Менеджмент УП экономика</option>
     <option value="kit3">Реклама, лингвистика, журналистика, ГМУ</option>
-    <option value="kit4">Условный комплект 4(new_docx11)</option>
+    <option value="kit4">Для выпускников</option>
     <!-- добавишь ещё, когда появятся новые наборы -->
   </select>
 
