@@ -518,6 +518,7 @@ TEMPLATES = [
             "kurs": "Курс",
             "group": "Группа",
             "fio": "ФИО",
+            # "fioRP": "ФИОРП",
             "startPracticaDate": "НачалоПрактики",
             "endPracticaDate": "КонецПрактики",
             "org_name": "БазаПрактики",
@@ -621,6 +622,7 @@ TEMPLATES = [
             "initialStudent": "ИнициалыСтудента",
             "org_name": "БазаПрактики",
             "naprPodg": "направлениеПодготовки",
+            "UrAdrVUZ": "ЮрАдресПрофОрг",
         }
     },
     {

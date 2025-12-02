@@ -24,6 +24,7 @@ from fastapi.responses import (
     PlainTextResponse,
     FileResponse,
 )
+from datetime import datetime
 from docxtpl import DocxTemplate
 import jinja2
 JINJA_ENV = jinja2.Environment()
@@ -104,6 +105,14 @@ KIT_TEMPLATES: Dict[str, Path] = {
     "kit2": BASE_DIR / "table_templates" / "Менеджмент УП экономика шаблон.xlsx",
     "kit3": BASE_DIR / "table_templates" / "Реклама, лингвистика, журналистика, ГМУ шаблон.xlsx",
     "kit4": BASE_DIR / "table_templates" / "docx11 шаблон.xlsx",
+}
+
+KIT_MACROS: Dict[str, Path] = {
+    # примеры — переименуй под свои реальные файлы:
+    "kit1": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+    "kit2": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+    "kit3": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+    "kit4": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
 }
 
 # === Настройки выдачи Инструкции ===
@@ -408,6 +417,7 @@ select option:hover {
 
   <div class="row">
     <button class="btn-outline floaty" id="btnTemplate">📄 Скачать шаблон</button>
+    <button class="btn-outline floaty" id="btnMacro">🧩 Скачать макрос</button>
     <button class="btn-outline floaty" id="btnInstruction">📘 Скачать инструкцию</button>
   </div>
 
@@ -451,6 +461,13 @@ select option:hover {
     kit2: "Менеджмент УП экономика шаблон",
     kit3: "Реклама, лингвистика, журналистика, ГМУ.xlsx",
     kit4: "docx11 шаблон",
+  };
+
+  const kitMacroNames = {
+    kit1: "macro_kit1.xlsm",
+    kit2: "macro_kit2.xlsm",
+    kit3: "Реклама,_лингвистика,_журналистика,_ГМУ_2.xlsm",
+    kit4: "macro_kit4.xlsm",
   };
 
   const directionSelect = document.getElementById("direction");
@@ -544,6 +561,35 @@ select option:hover {
     }
   });
 
+    // ==== скачать макрос (xlsm) по выбранному комплекту ====
+  document.getElementById("btnMacro").addEventListener("click", async () => {
+    const kit = directionSelect.value;
+    if (!kit) {
+      alert("Сначала выберите комплект");
+      return;
+    }
+
+    const url = "/macro?kit=" + encodeURIComponent(kit);
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const text = await resp.text();
+        alert("Ошибка при скачивании макроса: " + text);
+        return;
+      }
+
+      const blob = await resp.blob();
+
+      // имя файла берём из словаря, чтобы совпадало с реальным .xlsm
+      const filename = kitMacroNames[kit] || "macro.xlsm";
+      blobDownload(filename, blob);
+    } catch (e) {
+      alert("Сетевая ошибка при скачивании макроса: " + e.message);
+    }
+  });
+
+
   // ==== старый функционал: скачать инструкцию ====
   document.getElementById("btnInstruction").addEventListener("click", () => {
     window.location.href = "/instruction";
@@ -622,6 +668,35 @@ select option:hover {
 INVALID_FS = r'[<>:"/\\|?*]'
 
 def safe(v): return "" if (v is None or pd.isna(v)) else str(v).strip()
+
+def normalize_date(value) -> str:
+    """
+    Преобразует значения вида '2025-10-02 00:00:00' / '2025-10-02'
+    в '02.10.2025'. Если формат не опознан — возвращает как есть.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+
+    s = str(value).strip()
+    if not s:
+        return ""
+
+    # возможные входные форматы
+    formats = [
+        "%Y-%m-%d %H:%M:%S",  # 2025-10-02 00:00:00
+        "%Y-%m-%d",           # 2025-10-02
+        "%d.%m.%Y",           # 02.10.2025
+    ]
+
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%d.%m.%Y")
+        except ValueError:
+            continue
+
+    # не дата — возвращаем исходную строку
+    return s
 
 def letter(value: str, index: int) -> str:
     """
@@ -904,6 +979,36 @@ def download_template(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
+# -------- макрос Excel (xlsm) --------
+@app.get("/macro")
+def download_macro(
+    kit: Optional[str] = Query(
+        default=None,
+        description="id комплекта (kit1, kit2, kit3, kit4)",
+    ),
+):
+    if not kit:
+        raise HTTPException(400, detail="Не указан комплект (kit)")
+
+    kit = kit.strip()
+    path = KIT_MACROS.get(kit)
+    if not path:
+        raise HTTPException(
+            400,
+            detail=f"Для комплекта {kit} не настроен макрос",
+        )
+    if not path.is_file():
+        raise HTTPException(
+            500,
+            detail=f"Файл макроса для комплекта {kit} не найден по пути {path}",
+        )
+
+    return FileResponse(
+        path,
+        filename=path.name,
+        media_type="application/vnd.ms-excel.sheet.macroEnabled.12",
+    )
+
 # -------- инструкция DOCX --------
 def _build_instruction_docx_bytes() -> bytes:
     """Генерация дефолтной инструкции (если нет готового файла)."""
@@ -1071,10 +1176,17 @@ def generate_zip(
             for tpl in templates:
                 try:
                     # контекст: {tpl_key: значение из record по названию колонки}
-                    ctx = {
-                        tpl_key: safe(record.get(excel_col, ""))
-                        for tpl_key, excel_col in tpl["fields"].items()
-                    }
+                    ctx = {}
+                    for tpl_key, excel_col in tpl["fields"].items():
+                        raw_val = record.get(excel_col, "")
+
+                        # сначала пробуем интерпретировать значение как дату
+                        raw_val = normalize_date(raw_val)
+                        # потом уже просто "подчищаем" строку
+                        raw_val = safe(raw_val)
+
+                        ctx[tpl_key] = raw_val
+
                     doc = DocxTemplate(tpl["path"])
                     doc.render(ctx, jinja_env=JINJA_ENV)
 
