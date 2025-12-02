@@ -107,13 +107,15 @@ KIT_TEMPLATES: Dict[str, Path] = {
     "kit4": BASE_DIR / "table_templates" / "docx11 шаблон.xlsx",
 }
 
-KIT_MACROS: Dict[str, Path] = {
-    # примеры — переименуй под свои реальные файлы:
-    "kit1": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
-    "kit2": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
-    "kit3": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
-    "kit4": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
-}
+# KIT_MACROS: Dict[str, Path] = {
+#     # примеры — переименуй под свои реальные файлы:
+#     "kit1": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+#     "kit2": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+#     "kit3": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+#     "kit4": BASE_DIR / "macros" / "макрос для рекламы.xlsm",
+# }
+
+GLOBAL_MACRO = BASE_DIR / "macros" / "макрос.xlsm"
 
 # === Настройки выдачи Инструкции ===
 INSTRUCTION_DOWNLOAD_NAME = "instruction.docx"
@@ -561,34 +563,22 @@ select option:hover {
     }
   });
 
-    // ==== скачать макрос (xlsm) по выбранному комплекту ====
+  // ==== скачать макрос для всех комплектов ====
   document.getElementById("btnMacro").addEventListener("click", async () => {
-    const kit = directionSelect.value;
-    if (!kit) {
-      alert("Сначала выберите комплект");
-      return;
-    }
+      try {
+          const resp = await fetch("/macro");
+          if (!resp.ok) {
+              const text = await resp.text();
+              alert("Ошибка при скачивании макроса: " + text);
+              return;
+          }
 
-    const url = "/macro?kit=" + encodeURIComponent(kit);
-
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) {
-        const text = await resp.text();
-        alert("Ошибка при скачивании макроса: " + text);
-        return;
+          const blob = await resp.blob();
+          blobDownload("macro.xlsm", blob);
+      } catch (e) {
+          alert("Сетевая ошибка при скачивании макроса: " + e.message);
       }
-
-      const blob = await resp.blob();
-
-      // имя файла берём из словаря, чтобы совпадало с реальным .xlsm
-      const filename = kitMacroNames[kit] || "macro.xlsm";
-      blobDownload(filename, blob);
-    } catch (e) {
-      alert("Сетевая ошибка при скачивании макроса: " + e.message);
-    }
   });
-
 
   // ==== старый функционал: скачать инструкцию ====
   document.getElementById("btnInstruction").addEventListener("click", () => {
@@ -979,28 +969,44 @@ def download_template(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-# -------- макрос Excel (xlsm) --------
-@app.get("/macro")
-def download_macro(
-    kit: Optional[str] = Query(
-        default=None,
-        description="id комплекта (kit1, kit2, kit3, kit4)",
-    ),
-):
-    if not kit:
-        raise HTTPException(400, detail="Не указан комплект (kit)")
+# # -------- макрос Excel (xlsm) --------
+# @app.get("/macro")
+# def download_macro(
+#     kit: Optional[str] = Query(
+#         default=None,
+#         description="id комплекта (kit1, kit2, kit3, kit4)",
+#     ),
+# ):
+#     if not kit:
+#         raise HTTPException(400, detail="Не указан комплект (kit)")
 
-    kit = kit.strip()
-    path = KIT_MACROS.get(kit)
-    if not path:
-        raise HTTPException(
-            400,
-            detail=f"Для комплекта {kit} не настроен макрос",
-        )
+#     kit = kit.strip()
+#     path = KIT_MACROS.get(kit)
+#     if not path:
+#         raise HTTPException(
+#             400,
+#             detail=f"Для комплекта {kit} не настроен макрос",
+#         )
+#     if not path.is_file():
+#         raise HTTPException(
+#             500,
+#             detail=f"Файл макроса для комплекта {kit} не найден по пути {path}",
+#         )
+
+#     return FileResponse(
+#         path,
+#         filename=path.name,
+#         media_type="application/vnd.ms-excel.sheet.macroEnabled.12",
+#     )
+
+# -------- макрос для всех комплектов --------
+@app.get("/macro")
+def download_macro():
+    path = GLOBAL_MACRO
     if not path.is_file():
         raise HTTPException(
             500,
-            detail=f"Файл макроса для комплекта {kit} не найден по пути {path}",
+            detail=f"Файл макроса не найден по пути {path}",
         )
 
     return FileResponse(
@@ -1008,6 +1014,7 @@ def download_macro(
         filename=path.name,
         media_type="application/vnd.ms-excel.sheet.macroEnabled.12",
     )
+
 
 # -------- инструкция DOCX --------
 def _build_instruction_docx_bytes() -> bytes:
