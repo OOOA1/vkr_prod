@@ -1,0 +1,20 @@
+uvicorn server:app --host 0.0.0.0 --port 8000 --reload -- старт сервера
+http://localhost:8000/ -- локальная ссылка для разработки
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\venv\Scripts\python.exe -m uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+
+/////////Работа с ВДС//////////////
+
+cd /opt/vkr_prod
+
+# подтянуть свежий код
+git fetch origin
+git reset --hard origin/main   # или origin/master, если ветка master
+
+# обновить зависимости
+source venv/bin/activate
+pip install -r requirements.txt
+
+# перезапустить сервис
+sudo systemctl restart vkr.service
+sudo systemctl status vkr.service --no-pager
