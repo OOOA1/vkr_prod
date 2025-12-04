@@ -13,6 +13,7 @@ TEMPLATES = [
             "vidPractikiRP": "ВидПрактикаРП",
             "kurs": "Курс",
             "kafedra": "направленность (кафедра)",
+            "kafedraName" : "КафедраНазвание",
             "fio": "ФИО",
             "startPracticaDate": "НачалоПрактики",
             "endPracticaDate": "КонецПрактики",

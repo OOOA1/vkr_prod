@@ -411,7 +411,7 @@ select option:hover {
   <p class="sub">Создавайте и скачивайте шаблоны по направлениям подготовки. Лёгкий, современный и стильный интерфейс.</p>
 
   <label>Загрузить таблицу Excel или CSV</label>
-  <input type="file" id="fileInput" accept=".xlsx,.csv">
+  <input type="file" id="fileInput" accept=".xlsx,.xlsm,.csv">
   <small style="color:var(--subtext)">Поддерживаются .xlsx и .csv файлы</small>
 
   <label style="margin-top:14px;">Или вставьте ссылку на Google Sheet</label>
@@ -419,7 +419,7 @@ select option:hover {
 
   <div class="row">
     <button class="btn-outline floaty" id="btnTemplate">📄 Скачать шаблон</button>
-    <button class="btn-outline floaty" id="btnMacro">🧩 Скачать макрос</button>
+<!--    <button class="btn-outline floaty" id="btnMacro">🧩 Скачать макрос</button> -->
     <button class="btn-outline floaty" id="btnInstruction">📘 Скачать инструкцию</button>
   </div>
 
@@ -564,21 +564,24 @@ select option:hover {
   });
 
   // ==== скачать макрос для всех комплектов ====
-  document.getElementById("btnMacro").addEventListener("click", async () => {
-      try {
-          const resp = await fetch("/macro");
-          if (!resp.ok) {
-              const text = await resp.text();
-              alert("Ошибка при скачивании макроса: " + text);
-              return;
-          }
+  const btnMacro = document.getElementById("btnMacro");
+  if (btnMacro) {
+      btnMacro.addEventListener("click", async () => {
+          try {
+              const resp = await fetch("/macro");
+              if (!resp.ok) {
+                  const text = await resp.text();
+                  alert("Ошибка при скачивании макроса: " + text);
+                  return;
+              }
 
-          const blob = await resp.blob();
-          blobDownload("macro.xlsm", blob);
-      } catch (e) {
-          alert("Сетевая ошибка при скачивании макроса: " + e.message);
-      }
-  });
+              const blob = await resp.blob();
+              blobDownload("macro.xlsm", blob);
+          } catch (e) {
+              alert("Сетевая ошибка при скачивании макроса: " + e.message);
+          }
+      });
+  }
 
   // ==== старый функционал: скачать инструкцию ====
   document.getElementById("btnInstruction").addEventListener("click", () => {
@@ -657,7 +660,36 @@ select option:hover {
 # ============= Бизнес-логика =============
 INVALID_FS = r'[<>:"/\\|?*]'
 
-def safe(v): return "" if (v is None or pd.isna(v)) else str(v).strip()
+def safe(v):
+    """
+    Аккуратно приводит значение к строке:
+    - пустые/NaN → ""
+    - числа вроде 4.0, 2025.0 → "4", "2025"
+    - большие числа не уходят в формат 4.89e+12
+    - всё остальное → обычная строка без лишних пробелов
+    """
+    # Пустые значения (NaN, None и т.п.)
+    try:
+        if v is None or pd.isna(v):
+            return ""
+    except Exception:
+        # на случай, если pd.isna не умеет этот тип — просто идём дальше
+        if v is None:
+            return ""
+
+    # Числа с плавающей точкой: именно тут появляется "4.0", "2025.0" и scientific notation
+    if isinstance(v, float):
+        # Если число "целое" (4.0, 2025.0, 1234567890123.0) — возвращаем его без .0
+        if v.is_integer():
+            return str(int(v))
+
+        # Если есть дробная часть — форматируем без экспоненциальной записи
+        # с максимумом значимых цифр, без лишних нулей в конце
+        s = "{:.15g}".format(v)
+        return s.strip()
+
+    # Всё остальное — просто строка
+    return str(v).strip()
 
 def normalize_date(value) -> str:
     """
@@ -809,11 +841,16 @@ def read_kv_from_raw(file_bytes: bytes, is_xlsx: bool, key_row: int = 1, val_row
 def extract_record_from_upload(file: UploadFile, header_row: int) -> Tuple[Dict[str,str], Dict, Optional[list]]:
     data = file.file.read()
     name = (file.filename or "").lower()
-    is_xlsx = name.endswith(".xlsx")
-    if not (is_xlsx or name.endswith(".csv")):
-        raise HTTPException(400, "Поддерживаются только .xlsx или .csv")
 
-    df_wide, meta = read_wide_try(data, is_xlsx, header_row)
+    # считаем Excel-файлом и .xlsx, и .xlsm
+    is_excel = name.endswith(".xlsx") or name.endswith(".xlsm")
+
+    # если это не Excel и не CSV — ругаемся
+    if not (is_excel or name.endswith(".csv")):
+        raise HTTPException(400, "Поддерживаются только .xlsx, .xlsm или .csv")
+
+    # пробуем прочитать "широкую" таблицу (несколько строк студентов)
+    df_wide, meta = read_wide_try(data, is_excel, header_row)
     if not df_wide.empty:
         cols = [str(c) for c in df_wide.columns]
         sc = score_columns(cols)  # теперь только для информации
@@ -823,9 +860,10 @@ def extract_record_from_upload(file: UploadFile, header_row: int) -> Tuple[Dict[
         return row_dict, meta, cols
 
     # если df_wide пустой (совсем ничего не прочитали) — пробуем kv-режим
-    kv, meta_kv = read_kv_from_raw(data, is_xlsx, 1, 2)
+    kv, meta_kv = read_kv_from_raw(data, is_excel, 1, 2)
     meta_kv.setdefault("score", 0)
     return kv, meta_kv, None
+
 
 def extract_record_from_gsheet(url: str, header_row: int) -> Tuple[Dict[str,str], Dict, Optional[list]]:
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url or "")
@@ -899,11 +937,14 @@ def extract_records_from_upload_multi(
     """
     data = file.file.read()
     name = (file.filename or "").lower()
-    is_xlsx = name.endswith(".xlsx")
-    if not (is_xlsx or name.endswith(".csv")):
-        raise HTTPException(400, "Поддерживаются только .xlsx или .csv")
 
-    df_wide, meta = read_wide_try(data, is_xlsx, header_row)
+    # Excel-файлы: и .xlsx, и .xlsm
+    is_excel = name.endswith(".xlsx") or name.endswith(".xlsm")
+
+    if not (is_excel or name.endswith(".csv")):
+        raise HTTPException(400, "Поддерживаются только .xlsx, .xlsm или .csv")
+
+    df_wide, meta = read_wide_try(data, is_excel, header_row)
     if not df_wide.empty:
         records, cols = records_from_wide_df(df_wide)
         sc = score_columns(cols)
@@ -911,10 +952,9 @@ def extract_records_from_upload_multi(
         return records, meta, cols
 
     # если wide-режим ничего не дал — используем старый kv-режим (одна запись)
-    kv, meta_kv = read_kv_from_raw(data, is_xlsx, 1, 2)
+    kv, meta_kv = read_kv_from_raw(data, is_excel, 1, 2)
     meta_kv.setdefault("score", 0)
     return [kv], meta_kv, None
-
 
 def extract_records_from_gsheet_multi(
     url: str,
